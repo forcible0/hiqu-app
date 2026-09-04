@@ -35,9 +35,17 @@ function App() {
   // Electron güncelleme event'leri
   useEffect(() => {
     if (typeof window !== 'undefined' && window.electronAPI) {
-      const handleUpdateAvailable = () => {
+      const handleUpdateAvailable = (_event: any, info: any) => {
         setUpdateAvailable(true);
-        setUpdateStatus('Güncelleme mevcut!');
+        setUpdateStatus(`Yeni sürüm bulundu${info?.version ? `: v${info.version}` : ''}. İndiriliyor...`);
+      };
+
+      const handleUpdateNotAvailable = () => {
+        setUpdateStatus('Uygulama güncel. Yeni sürüm bulunamadı.');
+      };
+
+      const handleDownloadProgress = (_event: any, progress: { percent: number }) => {
+        setUpdateStatus(`Güncelleme indiriliyor... %${Math.round(progress.percent)}`);
       };
 
       const handleUpdateDownloaded = () => {
@@ -52,6 +60,8 @@ function App() {
       };
 
       window.electronAPI.onUpdateAvailable(handleUpdateAvailable);
+      window.electronAPI.onUpdateNotAvailable(handleUpdateNotAvailable);
+      window.electronAPI.onDownloadProgress(handleDownloadProgress);
       window.electronAPI.onUpdateDownloaded(handleUpdateDownloaded);
       window.electronAPI.onUpdateError(handleUpdateError);
 
