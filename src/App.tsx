@@ -123,14 +123,28 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white flex flex-col">
-      <header className="bg-gray-800 border-b border-gray-700 p-4 flex justify-between items-center">
-        <h1 className="text-2xl font-bold">League Champions</h1>
-        <div className="flex items-center gap-4">
-          {appVersion && <span className="text-gray-400 text-sm">v{appVersion}</span>}
+    <div className="h-screen bg-[#0b0f17] text-white flex flex-col overflow-hidden bg-[radial-gradient(ellipse_at_top,_rgba(37,72,120,0.25),_transparent_60%)]">
+      <header className="bg-white/[0.03] backdrop-blur-md border-b border-white/[0.06] px-6 py-4 flex justify-between items-center shrink-0">
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-lg shadow-lg shadow-blue-500/25">
+            ⚡
+          </div>
+          <div>
+            <h1 className="text-lg font-bold tracking-tight leading-none">
+              League <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">Champions</span>
+            </h1>
+            <p className="text-[11px] text-gray-500 mt-0.5">Skin & Koleksiyon Yöneticisi</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          {appVersion && (
+            <span className="text-gray-500 text-xs font-medium bg-white/[0.05] border border-white/[0.08] px-2.5 py-1 rounded-full">
+              v{appVersion}
+            </span>
+          )}
           <button
             onClick={() => setShowSettings(true)}
-            className="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded transition"
+            className="bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] px-4 py-2 rounded-xl transition-colors text-sm font-medium"
           >
             ⚙️ Ayarlar
           </button>
@@ -138,24 +152,32 @@ function App() {
       </header>
 
       <div className="flex flex-1 overflow-hidden">
-        {/* Sol Panel - Şampiyon Listesi */}
-        <div className="w-80 bg-gray-800 border-r border-gray-700 flex flex-col">
-          <div className="p-4 border-b border-gray-700">
-            <input
-              type="text"
-              placeholder="Şampiyon ara..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full bg-gray-700 text-white px-4 py-2 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+        {/* Sol Panel - Şampiyon Listesi (kendi kaydırma çubuğu) */}
+        <div className="w-80 bg-white/[0.02] border-r border-white/[0.06] flex flex-col shrink-0 overflow-hidden">
+          <div className="p-4 border-b border-white/[0.06] space-y-3">
+            <div className="relative">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-500 text-sm pointer-events-none">
+                🔍
+              </span>
+              <input
+                type="text"
+                placeholder="Şampiyon ara..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full bg-white/[0.05] border border-white/[0.08] text-white placeholder-gray-500 pl-10 pr-4 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/60 focus:border-blue-500/40 transition text-sm"
+              />
+            </div>
+            <p className="text-[11px] text-gray-500 font-medium px-1">
+              {filteredChampions.length} şampiyon
+            </p>
           </div>
 
           {error && (
-            <div className="p-4 bg-red-500/20 border border-red-500 text-red-100 m-4 rounded">
+            <div className="p-3 bg-red-500/10 border border-red-500/40 text-red-200 m-4 rounded-xl flex items-center justify-between text-sm">
               <span>{error}</span>
               <button
                 onClick={loadChampions}
-                className="ml-2 bg-red-500 hover:bg-red-600 px-2 py-1 rounded text-sm"
+                className="bg-red-500/80 hover:bg-red-500 px-2.5 py-1 rounded-lg text-xs font-medium transition"
               >
                 Tekrar Dene
               </button>
@@ -167,30 +189,46 @@ function App() {
               <div className="flex justify-center items-center h-32">
                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-blue-500"></div>
               </div>
+            ) : filteredChampions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-40 text-gray-500">
+                <span className="text-3xl mb-2">🕵️</span>
+                <p className="text-sm">Sonuç bulunamadı</p>
+              </div>
             ) : (
               <div className="space-y-1">
                 {filteredChampions.map((champion) => (
                   <div
                     key={champion.id}
-                    className={`flex items-center p-2 rounded cursor-pointer hover:bg-gray-700 transition ${
-                      selectedChampion?.id === champion.id ? 'bg-gray-700' : ''
+                    className={`flex items-center p-2 rounded-xl cursor-pointer transition-all border group ${
+                      selectedChampion?.id === champion.id
+                        ? 'bg-blue-500/15 border-blue-500/40 shadow-lg shadow-blue-500/10'
+                        : 'border-transparent hover:bg-white/[0.05]'
                     }`}
                     onClick={() => handleChampionSelect(champion)}
                   >
                     <img
                       src={champion.image}
                       alt={champion.name}
-                      className="w-12 h-12 rounded object-cover mr-3"
+                      className={`w-11 h-11 rounded-lg object-cover mr-3 transition ${
+                        selectedChampion?.id === champion.id ? 'ring-2 ring-blue-400/60' : ''
+                      }`}
                       onError={(e) => {
                         (e.target as HTMLImageElement).style.display = 'none';
                       }}
                     />
-                    <div>
-                      <p className="font-semibold">{champion.name}</p>
+                    <div className="min-w-0">
+                      <p className={`font-semibold text-sm truncate ${
+                        selectedChampion?.id === champion.id ? 'text-blue-300' : ''
+                      }`}>
+                        {champion.name}
+                      </p>
                       {champion.title && (
-                        <p className="text-gray-400 text-xs">{champion.title}</p>
+                        <p className="text-gray-500 text-xs truncate">{champion.title}</p>
                       )}
                     </div>
+                    {selectedChampion?.id === champion.id && (
+                      <span className="ml-auto text-blue-400 text-xs">▸</span>
+                    )}
                   </div>
                 ))}
               </div>
@@ -198,70 +236,105 @@ function App() {
           </div>
         </div>
 
-        {/* Sağ Panel - Skin'ler */}
-        <div className="flex-1 overflow-y-auto p-6">
+        {/* Sağ Panel - Şampiyon detayı (sabit) + Skin grid (kendi kaydırma çubuğu) */}
+        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
           {selectedChampion ? (
-            <div>
-              <div className="mb-6">
-                <div className="flex items-center mb-4">
+            <>
+              {/* Sabit şampiyon başlığı */}
+              <div className="relative shrink-0 border-b border-white/[0.06] overflow-hidden">
+                {/* Arka plan splash */}
+                <div className="absolute inset-0">
                   <img
-                    src={selectedChampion.image}
-                    alt={selectedChampion.name}
-                    className="w-16 h-16 rounded object-cover mr-4"
+                    src={getSkinImage(selectedChampion.skins?.[0]?.num ?? 0, selectedChampion.id)}
+                    alt=""
+                    className="w-full h-full object-cover object-top opacity-20 blur-sm scale-105"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none';
+                    }}
                   />
-                  <div>
-                    <h2 className="text-3xl font-bold">{selectedChampion.name}</h2>
-                    {selectedChampion.title && (
-                      <p className="text-gray-400">{selectedChampion.title}</p>
-                    )}
-                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-b from-[#0b0f17]/60 via-[#0b0f17]/85 to-[#0b0f17]"></div>
                 </div>
 
-                {selectedChampion.description && (
-                  <p className="text-gray-300 mb-4">{selectedChampion.description}</p>
-                )}
+                <div className="relative px-6 py-5">
+                  <div className="flex items-center gap-4">
+                    <img
+                      src={selectedChampion.image}
+                      alt={selectedChampion.name}
+                      className="w-16 h-16 rounded-2xl object-cover ring-2 ring-blue-500/40 shadow-lg shadow-blue-500/20"
+                    />
+                    <div className="min-w-0">
+                      <h2 className="text-2xl font-bold tracking-tight truncate">{selectedChampion.name}</h2>
+                      {selectedChampion.title && (
+                        <p className="text-gray-400 text-sm">{selectedChampion.title}</p>
+                      )}
+                    </div>
+                    <div className="ml-auto shrink-0 bg-white/[0.05] border border-white/[0.08] px-3 py-1.5 rounded-full text-xs font-medium text-gray-300">
+                      {loadingSkins ? 'Yükleniyor...' : `${championSkins.length} skin`}
+                    </div>
+                  </div>
+
+                  {selectedChampion.description && (
+                    <p className="text-gray-400 text-sm mt-3 line-clamp-2 max-w-3xl">
+                      {selectedChampion.description}
+                    </p>
+                  )}
+                </div>
               </div>
 
-              {loadingSkins ? (
-                <div className="flex justify-center items-center h-64">
-                  <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-blue-500"></div>
-                </div>
-              ) : championSkins.length > 0 ? (
-                <div>
-                  <h3 className="text-xl font-bold mb-4">Skin'ler ({championSkins.length})</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                    {championSkins.map((skin) => (
-                      <div
-                        key={skin.id}
-                        className="bg-gray-800 rounded-lg overflow-hidden hover:scale-105 transition-transform cursor-pointer"
-                      >
-                        <div className="aspect-video bg-gray-700 flex items-center justify-center overflow-hidden">
-                          <img
-                            src={getSkinImage(skin.num, selectedChampion.id)}
-                            alt={skin.name}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).style.display = 'none';
-                            }}
-                          />
-                        </div>
-                        <div className="p-3">
-                          <p className="font-semibold text-sm truncate">{skin.name}</p>
-                        </div>
-                      </div>
-                    ))}
+              {/* Sadece bu alan kayar - kendi scroll barı */}
+              <div className="flex-1 overflow-y-auto p-6">
+                {loadingSkins ? (
+                  <div className="flex flex-col items-center justify-center h-64 gap-4">
+                    <div className="animate-spin rounded-full h-14 w-14 border-t-2 border-b-2 border-blue-500"></div>
+                    <p className="text-gray-500 text-sm">Skinler yükleniyor...</p>
                   </div>
-                </div>
-              ) : (
-                <div className="text-center py-12 text-gray-400">
-                  Skin bulunamadı
-                </div>
-              )}
-            </div>
+                ) : championSkins.length > 0 ? (
+                  <div className="fade-in">
+                    <div className="flex items-center gap-2 mb-4">
+                      <span className="w-1 h-5 rounded bg-gradient-to-b from-blue-400 to-indigo-500"></span>
+                      <h3 className="text-lg font-bold tracking-tight">Skin'ler</h3>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4 pb-4">
+                      {championSkins.map((skin) => (
+                        <div
+                          key={skin.id}
+                          className="group bg-white/[0.03] border border-white/[0.06] rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:border-blue-500/50 hover:shadow-xl hover:shadow-blue-500/10 hover:-translate-y-1"
+                        >
+                          <div className="aspect-video bg-white/[0.03] flex items-center justify-center overflow-hidden">
+                            <img
+                              src={getSkinImage(skin.num, selectedChampion.id)}
+                              alt={skin.name}
+                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                              onError={(e) => {
+                                (e.target as HTMLImageElement).style.display = 'none';
+                              }}
+                            />
+                          </div>
+                          <div className="p-3 flex items-center justify-between gap-2">
+                            <p className="font-semibold text-sm truncate">{skin.name}</p>
+                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500/60 shrink-0"></span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+                    <span className="text-4xl mb-3">🗃️</span>
+                    <p>Skin bulunamadı</p>
+                  </div>
+                )}
+              </div>
+            </>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-gray-400">
-              <div className="text-6xl mb-4">🎮</div>
-              <p className="text-xl">Bir şampiyon seçin</p>
+            <div className="flex flex-col items-center justify-center h-full text-gray-500 gap-4">
+              <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-blue-500/20 to-indigo-500/20 border border-white/[0.08] flex items-center justify-center text-4xl">
+                🎮
+              </div>
+              <div className="text-center">
+                <p className="text-xl font-semibold text-gray-300">Bir şampiyon seçin</p>
+                <p className="text-sm text-gray-500 mt-1">Sol listeden bir şampiyon seçerek skinlerini görüntüleyin</p>
+              </div>
             </div>
           )}
         </div>
@@ -274,14 +347,14 @@ function App() {
           onClick={() => setShowSettings(false)}
         >
           <div
-            className="bg-gray-800 rounded-lg max-w-md w-full p-6"
+            className="bg-[#141a26] border border-white/[0.08] rounded-2xl max-w-md w-full p-6 shadow-2xl shadow-black/60 fade-in"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold">Ayarlar</h2>
+              <h2 className="text-xl font-bold tracking-tight">Ayarlar</h2>
               <button
                 onClick={() => setShowSettings(false)}
-                className="text-gray-400 hover:text-white text-2xl font-bold leading-none"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-white hover:bg-white/[0.08] transition text-xl leading-none"
               >
                 ×
               </button>
@@ -289,13 +362,13 @@ function App() {
 
             <div className="space-y-4">
               <div>
-                <h3 className="text-lg font-semibold mb-2">Güncellemeler</h3>
-                <p className="text-gray-400 text-sm mb-4">
+                <h3 className="text-base font-semibold mb-1.5">Güncellemeler</h3>
+                <p className="text-gray-500 text-sm mb-4">
                   Otomatik güncelleme kontrolü ve indirme
                 </p>
                 <button
                   onClick={handleCheckForUpdates}
-                  className="w-full bg-blue-600 hover:bg-blue-700 px-4 py-2 rounded transition"
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 px-4 py-2.5 rounded-xl font-medium transition shadow-lg shadow-blue-500/20"
                 >
                   Güncellemeleri Denetle
                 </button>
@@ -309,7 +382,7 @@ function App() {
                 )}
               </div>
 
-              <div className="border-t border-gray-700 pt-4">
+              <div className="border-t border-white/[0.08] pt-4">
                 <p className="text-gray-400 text-sm">
                   Buck v{appVersion} - League Champions Manager
                 </p>
