@@ -37,6 +37,7 @@ export async function fetchChampions(): Promise<SkinItem[]> {
     // Her şampiyonu SkinItem formatına dönüştür
     return sortedChampions.map((champion: any) => ({
       id: champion.id,
+      key: champion.key, // Sayısal ID (LeagueSkins reposu için gerekli)
       name: champion.name,
       champion: champion.name,
       title: champion.title,

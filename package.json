@@ -1,5 +1,5 @@
 {
-  "name": "buck",
+  "name": "hiqu",
   "version": "1.0.0",
   "description": "Electron + React + TypeScript + Tailwind CSS masaüstü uygulaması",
   "main": "main.js",
@@ -41,8 +41,8 @@
     "react-dom": "^18.2.0"
   },
   "build": {
-    "appId": "com.buck.app",
-    "productName": "Buck",
+    "appId": "com.hiqu.app",
+    "productName": "Hiqu",
     "directories": {
       "output": "release",
       "buildResources": "build"
@@ -64,7 +64,7 @@
     "publish": {
       "provider": "github",
       "owner": "forcible0",
-      "repo": "buck"
+      "repo": "hiqu-app"
     }
   }
 }
