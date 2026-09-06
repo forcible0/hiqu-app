@@ -1,6 +1,6 @@
 {
   "name": "hiqu",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Electron + React + TypeScript + Tailwind CSS masaüstü uygulaması",
   "main": "main.js",
   "scripts": {
@@ -36,6 +36,7 @@
     "wait-on": "^7.2.0"
   },
   "dependencies": {
+    "7zip-bin": "^5.2.0",
     "electron-updater": "^6.8.9",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
@@ -51,6 +52,7 @@
       "dist/**/*",
       "main.js",
       "preload.js",
+      "wad.js",
       "package.json"
     ],
     "win": {
