@@ -51,6 +51,12 @@ export async function fetchChampions(): Promise<SkinItem[]> {
   }
 }
 
+// Skin splash görseli URL'si
+export function getSkinImageUrl(skinNum: number, championId: string): string {
+  if (!championId) return '';
+  return `https://ddragon.leagueoflegends.com/cdn/img/champion/splash/${championId}_${skinNum}.jpg`;
+}
+
 // Data Dragon'dan skinleri çek (chromasız)
 export async function fetchChampionSkins(championId: string): Promise<any[]> {
   try {

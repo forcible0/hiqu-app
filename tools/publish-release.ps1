@@ -16,19 +16,22 @@ $h = @{
 
 # 1) Mevcut release'i ve assetleri bul (yoksa olustur)
 try {
-  $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/tags/$Tag" -Headers $h
+  $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/tags/$Tag" -Headers $h -ErrorAction Stop
 } catch {
   if (-not $CreateIfMissing) { throw "Release $Tag bulunamadi." }
-  $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases" -Method Post -Headers $h -Body (@{
-    tag_name = $Tag; target_commitish = 'master'; name = "Hiqu $Version"
-  } | ConvertTo-Json)
+  $body = @{
+    tag_name         = $Tag
+    target_commitish = 'master'
+    name             = "Hiqu $Version"
+  }
+  $rel = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases" -Method Post -Headers $h -Body ($body | ConvertTo-Json) -ErrorAction Stop
   Write-Output "Release olusturuldu: $Tag"
 }
 Write-Output "Release id=$($rel.id) tag=$($rel.tag_name)"
 
 # 2) Eski (Buck) assetleri sil
 foreach ($a in $rel.assets) {
-  Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/assets/$($a.id)" -Method Delete -Headers $h | Out-Null
+  Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/assets/$($a.id)" -Method Delete -Headers $h -ErrorAction Stop | Out-Null
   Write-Output "silindi: $($a.name)"
 }
 

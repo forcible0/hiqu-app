@@ -17,6 +17,20 @@ export interface Skin {
   num: number;
 }
 
+// Bir skini her yerde tanımlamak için yeterli kalıcı bilgi.
+// Favoriler, Sıra ve İndirilenler bu yapıyla tutulur.
+export interface SkinMeta {
+  id: string;
+  name: string;
+  num: number;
+  championId: string;   // 'Ahri' gibi (splash görseli için)
+  championKey: string;  // Sayısal ID (LoLskins indirme URL'si için)
+  championName: string;
+  downloadedAt?: number;
+}
+
+export type TabKey = 'champions' | 'favorites' | 'downloaded';
+
 export interface AppSettings {
   patcherPath?: string;
   dllPath?: string;
@@ -25,6 +39,14 @@ export interface AppSettings {
 
 export interface Toast {
   id: number;
-  type: 'success' | 'error' | 'info';
+  type: 'success' | 'error' | 'info' | 'warning';
   message: string;
+}
+
+export interface ApplySkinsResult {
+  success: boolean;
+  error?: string;
+  alreadyActive?: string[];
+  missing?: string[];
+  warnings?: string[];
 }
