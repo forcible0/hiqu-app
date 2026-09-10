@@ -19,6 +19,359 @@ function loadJson<T>(key: string, fallback: T): T {
   }
 }
 
+// Şampiyon ID'lerini dosya adlarına map etme fonksiyonu
+function getChampionImageFilename(championId: string): string {
+  const mapping: Record<string, string> = {
+    'Aatrox': 'aatrox',
+    'Ahri': 'ahri',
+    'Akali': 'akali',
+    'Akshan': 'akshan',
+    'Alistar': 'alistar',
+    'Ambessa': 'ambessa',
+    'Amumu': 'amumu',
+    'Anivia': 'anivia',
+    'Annie': 'annie',
+    'Aphelios': 'aphelios',
+    'Ashe': 'ashe',
+    'AurelionSol': 'aurelionsol',
+    'Aurora': 'aurora',
+    'Azir': 'azir',
+    'Bard': 'bard',
+    'Belveth': 'belveth',
+    'Blitzcrank': 'blitzcrank',
+    'Brand': 'brand',
+    'Braum': 'braum',
+    'Briar': 'briar',
+    'Caitlyn': 'caitlyn',
+    'Camille': 'camille',
+    'Cassiopeia': 'cassiopeia',
+    'Chogath': 'chogath',
+    'Corki': 'corki',
+    'Darius': 'darius',
+    'Diana': 'diana',
+    'DrMundo': 'drmundo',
+    'Draven': 'draven',
+    'Ekko': 'ekko',
+    'Elise': 'elise',
+    'Evelynn': 'evelynn',
+    'Ezreal': 'ezreal',
+    'Fiddlesticks': 'fiddlesticks',
+    'Fiora': 'fiora',
+    'Fizz': 'fizz',
+    'Galio': 'galio',
+    'Gangplank': 'gangplank',
+    'Garen': 'garen',
+    'Gnar': 'gnar',
+    'Gragas': 'gragas',
+    'Graves': 'graves',
+    'Gwen': 'gwen',
+    'Hecarim': 'hecarim',
+    'Heimerdinger': 'heimerdinger',
+    'Hwei': 'hwei',
+    'Illaoi': 'illaoi',
+    'Irelia': 'irelia',
+    'Ivern': 'ivern',
+    'Janna': 'janna',
+    'JarvanIV': 'jarvaniv',
+    'Jax': 'jax',
+    'Jayce': 'jayce',
+    'Jhin': 'jhin',
+    'Jinx': 'jinx',
+    'KSante': 'ksante',
+    'Kaisa': 'kaisa',
+    'Kalista': 'kalista',
+    'Karma': 'karma',
+    'Karthus': 'karthus',
+    'Kassadin': 'kassadin',
+    'Katarina': 'katarina',
+    'Kayle': 'kayle',
+    'Kayn': 'kayn',
+    'Kennen': 'kennen',
+    'KhaZix': 'khazix',
+    'Kindred': 'kindred',
+    'Kled': 'kled',
+    'KogMaw': 'kogmaw',
+    'LeBlanc': 'leblanc',
+    'LeeSin': 'leesin',
+    'Leona': 'leona',
+    'Lillia': 'lillia',
+    'Lissandra': 'lissandra',
+    'Locke': 'locke',
+    'Lucian': 'lucian',
+    'Lulu': 'lulu',
+    'Lux': 'lux',
+    'Malphite': 'malphite',
+    'Malzahar': 'malzahar',
+    'Maokai': 'maokai',
+    'MasterYi': 'masteryi',
+    'Mel': 'mel',
+    'Milio': 'milio',
+    'MissFortune': 'missfortune',
+    'Mordekaiser': 'mordekaiser',
+    'Morgana': 'morgana',
+    'Naafiri': 'naafiri',
+    'Nami': 'nami',
+    'Nasus': 'nasus',
+    'Nautilus': 'nautilus',
+    'Neeko': 'neeko',
+    'Nidalee': 'nidalee',
+    'Nilah': 'nilah',
+    'Nocturne': 'nocturne',
+    'Nunu': 'nunu',
+    'Olaf': 'olaf',
+    'Orianna': 'orianna',
+    'Ornn': 'ornn',
+    'Pantheon': 'pantheon',
+    'Poppy': 'poppy',
+    'Pyke': 'pyke',
+    'Qiyana': 'qiyana',
+    'Quinn': 'quinn',
+    'Rakan': 'rakan',
+    'Rammus': 'rammus',
+    'RekSai': 'reksai',
+    'Rell': 'rell',
+    'Renata': 'renata',
+    'Renekton': 'renekton',
+    'Rengar': 'rengar',
+    'Riven': 'riven',
+    'Rumble': 'rumble',
+    'Ryze': 'ryze',
+    'Samira': 'samira',
+    'Sejuani': 'sejuani',
+    'Senna': 'senna',
+    'Seraphine': 'seraphine',
+    'Sett': 'sett',
+    'Shaco': 'shaco',
+    'Shen': 'shen',
+    'Shyvana': 'shyvana',
+    'Singed': 'singed',
+    'Sion': 'sion',
+    'Sivir': 'sivir',
+    'Skarner': 'skarner',
+    'Smolder': 'smolder',
+    'Sona': 'sona',
+    'Soraka': 'soraka',
+    'Swain': 'swain',
+    'Sylas': 'sylas',
+    'Syndra': 'syndra',
+    'TahmKench': 'tahmkench',
+    'Taliyah': 'taliyah',
+    'Talon': 'talon',
+    'Taric': 'taric',
+    'Teemo': 'teemo',
+    'Thresh': 'thresh',
+    'Tristana': 'tristana',
+    'Trundle': 'trundle',
+    'Tryndamere': 'tryndamere',
+    'TwistedFate': 'twistedfate',
+    'Twitch': 'twitch',
+    'Udyr': 'udyr',
+    'Urgot': 'urgot',
+    'Varus': 'varus',
+    'Vayne': 'vayne',
+    'Veigar': 'veigar',
+    'VelKoz': 'velkoz',
+    'Vex': 'vex',
+    'Vi': 'vi',
+    'Viego': 'viego',
+    'Viktor': 'viktor',
+    'Vladimir': 'vladimir',
+    'Volibear': 'volibear',
+    'Warwick': 'warwick',
+    'Wukong': 'wukong',
+    'Xayah': 'xayah',
+    'Xerath': 'xerath',
+    'XinZhao': 'xinzhao',
+    'Yasuo': 'yasuo',
+    'Yone': 'yone',
+    'Yorick': 'yorick',
+    'Yunara': 'yunara',
+    'Yuumi': 'yuumi',
+    'Zaahen': 'zaahen',
+    'Zac': 'zac',
+    'Zed': 'zed',
+    'Zeri': 'zeri',
+    'Ziggs': 'ziggs',
+    'Zilean': 'zilean',
+    'Zoe': 'zoe',
+    'Zyra': 'zyra',
+  };
+  
+  return mapping[championId] || championId.toLowerCase().replace(/[^a-z]/g, '');
+}
+
+// League of Legends resmi sitesine göre tahmini pozisyon değerleri (kullanıcı geri bildirimlerine göre)
+const CHAMPION_POSITIONS: Record<string, string> = {
+  'Aatrox': '75% center',
+  'Ahri': '70% center',
+  'Akali': '45% center',
+  'Akshan': '65% center',
+  'Alistar': '65% center',
+  'Amumu': '70% center',
+  'Anivia': '65% center',
+  'Annie': '95% center',
+  'Aphelios': '50% center',
+  'Ashe': '85% center',
+  'AurelionSol': '50% center',
+  'Azir': '80% center',
+  'Bard': '65% center',
+  'Belveth': '50% center',
+  'Blitzcrank': '70% center',
+  'Brand': '90% center',
+  'Braum': '80% center',
+  'Briar': '65% center',
+  'Caitlyn': '90% center',
+  'Camille': '90% center',
+  'Cassiopeia': '85% center',
+  'Chogath': '80% center',
+  'Corki': '85% center',
+  'Darius': '65% center',
+  'Diana': '85% center',
+  'DrMundo': '50% center',
+  'Draven': '95% center',
+  'Ekko': '90% center',
+  'Elise': '90% center',
+  'Evelynn': '50% center',
+  'Ezreal': '80% center',
+  'Fiddlesticks': '25% center',
+  'Fiora': '85% center',
+  'Fizz': '90% center',
+  'Galio': '40% center',
+  'Gangplank': '80% center',
+  'Garen': '90% center',
+  'Gnar': '90% center',
+  'Gragas': '80% center',
+  'Graves': '85% center',
+  'Gwen': '50% center',
+  'Hecarim': '65% center',
+  'Heimerdinger': '80% center',
+  'Illaoi': '70% center',
+  'Irelia': '50% center',
+  'Ivern': '50% center',
+  'Janna': '90% center',
+  'JarvanIV': '85% center',
+  'Jax': '70% center',
+  'Jayce': '85% center',
+  'Jhin': '55% center',
+  'Jinx': '90% center',
+  'Kaisa': '30% center',
+  'Kalista': '80% center',
+  'Karma': '90% center',
+  'Karthus': '80% center',
+  'Kassadin': '80% center',
+  'Katarina': '80% center',
+  'Kayle': '95% center',
+  'Kayn': '50% center',
+  'Kennen': '80% center',
+  'KhaZix': '60% center',
+  'Kindred': '50% center',
+  'Kled': '90% center',
+  'KogMaw': '85% center',
+  'LeBlanc': '50% center',
+  'LeeSin': '80% center',
+  'Leona': '95% center',
+  'Lillia': '30% center',
+  'Locke': '70% center',
+  'Lissandra': '80% center',
+  'Lucian': '90% center',
+  'Lulu': '80% center',
+  'Lux': '70% center',
+  'Malphite': '80% center',
+  'Malzahar': '70% center',
+  'Maokai': '80% center',
+  'MasterYi': '90% center',
+  'Mel': '40% center',
+  'Milio': '70% center',
+  'MissFortune': '90% center',
+  'Mordekaiser': '50% center',
+  'Morgana': '95% center',
+  'Naafiri': '30% center',
+  'Nami': '90% center',
+  'Nasus': '80% center',
+  'Nautilus': '85% center',
+  'Neeko': '50% center',
+  'Nidalee': '90% center',
+  'Nilah': '80% center',
+  'Nocturne': '80% center',
+  'Nunu': '80% center',
+  'Olaf': '75% center',
+  'Orianna': '80% center',
+  'Ornn': '50% center',
+  'Pantheon': '50% center',
+  'Poppy': '70% center',
+  'Pyke': '50% center',
+  'Qiyana': '50% center',
+  'Quinn': '70% center',
+  'Rakan': '60% center',
+  'Rammus': '80% center',
+  'RekSai': '70% center',
+  'Rell': '50% center',
+  'Renata': '70% center',
+  'Renekton': '70% center',
+  'Rengar': '80% center',
+  'Riven': '80% center',
+  'Rumble': '80% center',
+  'Ryze': '80% center',
+  'Samira': '60% center',
+  'Sejuani': '60% center',
+  'Senna': '60% center',
+  'Seraphine': '50% center',
+  'Sett': '50% center',
+  'Shaco': '90% center',
+  'Shen': '80% center',
+  'Shyvana': '50% center',
+  'Singed': '70% center',
+  'Sion': '80% center',
+  'Sivir': '50% center',
+  'Skarner': '50% center',
+  'Smolder': '50% center',
+  'Sona': '80% center',
+  'Soraka': '70% center',
+  'Swain': '80% center',
+  'Sylas': '50% center',
+  'Syndra': '50% center',
+  'TahmKench': '80% center',
+  'Taliyah': '80% center',
+  'Talon': '70% center',
+  'Taric': '90% center',
+  'Teemo': '60% center',
+  'Thresh': '70% center',
+  'Tristana': '70% center',
+  'Trundle': '70% center',
+  'Tryndamere': '70% center',
+  'TwistedFate': '85% center',
+  'Twitch': '50% center',
+  'Udyr': '50% center',
+  'Urgot': '60% center',
+  'Varus': '50% center',
+  'Vayne': '80% center',
+  'Veigar': '60% center',
+  'VelKoz': '70% center',
+  'Vex': '70% center',
+  'Vi': '80% center',
+  'Viego': '70% center',
+  'Viktor': '50% center',
+  'Vladimir': '70% center',
+  'Volibear': '70% center',
+  'Warwick': '70% center',
+  'Wukong': '80% center',
+  'Xayah': '75% center',
+  'Xerath': '60% center',
+  'XinZhao': '60% center',
+  'Yasuo': '95% center',
+  'Yone': '70% center',
+  'Yorick': '80% center',
+  'Yunara': '70% center',
+  'Yuumi': '40% center',
+  'Zac': '70% center',
+  'Zed': '80% center',
+  'Zeri': '50% center',
+  'Ziggs': '85% center',
+  'Zilean': '50% center',
+  'Zoe': '50% center',
+  'Zyra': '85% center',
+}
+
 export default function App() {
   // Şampiyon verisi
   const [champions, setChampions] = useState<SkinItem[]>([])
@@ -72,7 +425,9 @@ export default function App() {
   const queueIds = useMemo(() => new Set(queue.map((m) => m.id)), [queue])
 
   const refreshDownloaded = () => {
-    window.electronAPI.getDownloadedSkins().then(setDownloadedMetas)
+    if (window.electronAPI) {
+      window.electronAPI.getDownloadedSkins().then(setDownloadedMetas)
+    }
   }
 
   // İlk yükleme: şampiyonlar, ayarlar, indirilenler, aktif skinler
@@ -80,13 +435,15 @@ export default function App() {
     fetchChampions()
       .then(setChampions)
       .finally(() => setLoadingChampions(false))
-    window.electronAPI.getSettings().then(setSettings)
-    window.electronAPI.getAppVersion().then(setAppVersion)
-    refreshDownloaded()
-    window.electronAPI.getActiveSkins().then((ids) => {
-      setActiveSkins(ids)
-      setPatcherRunning(ids.length > 0)
-    })
+    if (window.electronAPI) {
+      window.electronAPI.getSettings().then(setSettings)
+      window.electronAPI.getAppVersion().then(setAppVersion)
+      refreshDownloaded()
+      window.electronAPI.getActiveSkins().then((ids) => {
+        setActiveSkins(ids)
+        setPatcherRunning(ids.length > 0)
+      })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -100,6 +457,7 @@ export default function App() {
 
   // IPC dinleyicileri
   useEffect(() => {
+    if (!window.electronAPI) return
     window.electronAPI.onSkinDownloadProgress((_, data) => {
       setDownloadProgress((prev) => ({ ...prev, [data.skinId]: data.percent }))
     })
@@ -192,6 +550,7 @@ export default function App() {
   // --- İndirme (aktif ETMEZ, sadece indirir) ---
 
   const handleDownload = async (meta: SkinMeta) => {
+    if (!window.electronAPI) return
     if (downloading.has(meta.id) || downloadedIds.has(meta.id)) return
     if (!meta.championKey) {
       addToast('error', 'Bu skin için indirme bilgisi eksik (şampiyon anahtarı yok)')
@@ -221,6 +580,7 @@ export default function App() {
   // --- Aktivasyon (tekil) ---
 
   const handleApply = async (meta: SkinMeta) => {
+    if (!window.electronAPI) return
     if (activeSet.has(meta.id)) {
       addToast('warning', `"${meta.name}" zaten aktif`)
       return
@@ -243,6 +603,7 @@ export default function App() {
   }
 
   const handleDeactivate = async (meta: SkinMeta) => {
+    if (!window.electronAPI) return
     const res = await window.electronAPI.deactivateSkin({ skinId: meta.id })
     if (!res.success) {
       addToast('error', res.error || 'Skin pasifleştirilemedi')
@@ -255,6 +616,7 @@ export default function App() {
   // --- Kaldırma ---
 
   const handleRemove = async (meta: SkinMeta) => {
+    if (!window.electronAPI) return
     setRemovingIds((prev) => setAdd(prev, meta.id))
     const res = await window.electronAPI.removeSkin({ skinId: meta.id })
     setRemovingIds((prev) => setRemove(prev, meta.id))
@@ -271,6 +633,7 @@ export default function App() {
   // --- Patchle: sıradaki TÜM skinleri indir + aktif et ---
 
   const handlePatch = async () => {
+    if (!window.electronAPI) return
     if (queue.length === 0 || isPatching) return
     setIsPatching(true)
     const failedIds = new Set<string>()
@@ -333,6 +696,7 @@ export default function App() {
   // --- Ayarlar ---
 
   const handleBrowse = async (field: 'patcherPath' | 'dllPath' | 'gamePath') => {
+    if (!window.electronAPI) return
     let result: string | null = null
     if (field === 'patcherPath') result = await window.electronAPI.selectPatcherPath()
     else if (field === 'dllPath') result = await window.electronAPI.selectDllPath()
@@ -343,12 +707,14 @@ export default function App() {
   }
 
   const handleSaveSettings = async (next: AppSettings) => {
+    if (!window.electronAPI) return
     const res = await window.electronAPI.saveSettings(next)
     if (res.success) addToast('success', 'Ayarlar kaydedildi')
     else addToast('error', res.error || 'Ayarlar kaydedilemedi')
   }
 
   const handleCheckUpdate = async () => {
+    if (!window.electronAPI) return
     setCheckingUpdate(true)
     const res = await window.electronAPI.checkForUpdates()
     setCheckingUpdate(false)
@@ -436,20 +802,42 @@ export default function App() {
           Şampiyonlar yükleniyor...
         </div>
       ) : (
-        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4">
           {filtered.map((c) => (
             <button
               key={c.id}
               onClick={() => selectChampion(c)}
-              className="group bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 hover:border-sky-500/50 hover:shadow-lg hover:shadow-sky-500/10 hover:-translate-y-0.5 transition-all text-center"
+              className="group bg-white/[0.03] border border-white/[0.06] rounded-xl overflow-hidden hover:border-sky-500/50 hover:shadow-lg hover:shadow-sky-500/10 hover:-translate-y-0.5 transition-all"
             >
-              <img
-                src={c.image}
-                alt={c.name}
-                className="w-14 h-14 rounded-lg mx-auto mb-2 group-hover:scale-105 transition-transform"
-                loading="lazy"
-              />
-              <p className="text-xs font-medium text-gray-300 truncate">{c.name}</p>
+              <div className="aspect-[3/4] relative overflow-hidden">
+                <img
+                  src={`./champions/${c.id === 'KhaZix' ? 'khazix' : c.id === 'Wukong' ? 'wukong' : getChampionImageFilename(c.id)}.jpg`}
+                  alt={c.name}
+                  className="w-full h-full object-cover transition-transform duration-300"
+                  style={{ 
+                    objectPosition: (() => {
+                      if (c.id === 'KhaZix') return '95% center';
+                      if (c.id === 'Wukong') return '90% center';
+                      return CHAMPION_POSITIONS[c.id] || 'center';
+                    })()
+                  }}
+                  onLoad={() => {
+                    console.log(`Görsel yüklendi: ${c.id} -> pozisyon: ${(() => {
+                      if (c.id === 'KhaZix') return '95% center';
+                      if (c.id === 'Wukong') return '90% center';
+                      return CHAMPION_POSITIONS[c.id] || 'center';
+                    })()}`);
+                  }}
+                  loading="lazy"
+                  onError={(e) => {
+                    console.error(`Görsel yüklenemedi: ${c.id} -> ${getChampionImageFilename(c.id)}.jpg`);
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              </div>
+              <div className="p-2 text-center">
+                <p className="text-xs font-medium text-gray-300 truncate">{c.name}</p>
+              </div>
             </button>
           ))}
         </div>
@@ -494,7 +882,7 @@ export default function App() {
           onBrowse={handleBrowse}
           onSaveSettings={handleSaveSettings}
           onCheckUpdate={handleCheckUpdate}
-          onInstallUpdate={() => window.electronAPI.installUpdate()}
+          onInstallUpdate={() => window.electronAPI?.installUpdate()}
         />
 
         <main className="flex-1 min-w-0 flex flex-col">
