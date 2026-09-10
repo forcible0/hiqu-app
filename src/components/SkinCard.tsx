@@ -31,11 +31,14 @@ export default function SkinCard({
 
   return (
     <div
-      onClick={onOpen}
-      className={`group relative bg-white/[0.03] border rounded-2xl overflow-hidden cursor-pointer transition-all duration-300 hover:border-sky-400/60 hover:shadow-xl hover:shadow-sky-500/10 hover:-translate-y-1 ${
-        isActive ? 'border-green-500/50' : 'border-white/[0.06]'
-      }`}
-    >
+  onClick={onOpen}
+  className="group relative cursor-pointer transition-shadow duration-300"
+>
+  <div
+    className={`relative bg-white/[0.03] border rounded-2xl overflow-hidden transition-all duration-300 hover:border-sky-400/60 hover:shadow-xl hover:shadow-sky-500/10 ${
+      isActive ? 'border-green-500/50' : 'border-white/[0.06]'
+    }`}
+  >
       <div className="relative aspect-video bg-white/[0.03] overflow-hidden">
         {imageUrl ? (
           <img
@@ -49,6 +52,12 @@ export default function SkinCard({
         ) : (
           <div className="w-full h-full flex items-center justify-center text-3xl text-gray-600">🎮</div>
         )}
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent pt-10 pb-2 px-3 pointer-events-none rounded-b-2xl">
+  <p className="text-sm font-semibold text-white truncate">{meta.name}</p>
+  {meta.championName && (
+    <p className="text-[11px] text-gray-300 truncate">{meta.championName}</p>
+  )}
+</div>
 
         {/* Favori butonu (sol üst) */}
         <button
@@ -87,7 +96,7 @@ export default function SkinCard({
         </div>
 
         {/* Hover hızlı aksiyonlar (alt) */}
-        <div className="absolute inset-x-0 bottom-0 flex justify-center gap-2 p-2 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 bg-gradient-to-t from-black/85 via-black/40 to-transparent">
+        <div className="absolute inset-x-0 bottom-0 flex justify-center gap-2 p-2 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200 bg-gradient-to-t from-black/85 via-black/40 to-transparent rounded-b-2xl">
           {!isDownloaded && !isDownloading && (
             <button
               onClick={(e) => {
@@ -118,11 +127,7 @@ export default function SkinCard({
           )}
         </div>
       </div>
-
-      <div className="p-3">
-        <p className="font-semibold text-sm truncate">{meta.name}</p>
-        {meta.championName && <p className="text-gray-500 text-xs truncate mt-0.5">{meta.championName}</p>}
-      </div>
     </div>
+  </div>
   )
 }

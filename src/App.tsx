@@ -354,7 +354,7 @@ const CHAMPION_POSITIONS: Record<string, string> = {
   'Vladimir': '70% center',
   'Volibear': '70% center',
   'Warwick': '70% center',
-  'Wukong': '80% center',
+  'Wukong': '95% center',
   'Xayah': '75% center',
   'Xerath': '60% center',
   'XinZhao': '60% center',
@@ -807,37 +807,37 @@ export default function App() {
             <button
               key={c.id}
               onClick={() => selectChampion(c)}
-              className="group bg-white/[0.03] border border-white/[0.06] rounded-xl overflow-hidden hover:border-sky-500/50 hover:shadow-lg hover:shadow-sky-500/10 hover:-translate-y-0.5 transition-all"
+              className="group bg-white/[0.03] border border-white/[0.06] rounded-xl overflow-hidden hover:border-sky-500/50 hover:shadow-lg hover:shadow-sky-500/10 transition-shadow"
             >
               <div className="aspect-[3/4] relative overflow-hidden">
-                <img
-                  src={`./champions/${c.id === 'KhaZix' ? 'khazix' : c.id === 'Wukong' ? 'wukong' : getChampionImageFilename(c.id)}.jpg`}
-                  alt={c.name}
-                  className="w-full h-full object-cover transition-transform duration-300"
-                  style={{ 
-                    objectPosition: (() => {
-                      if (c.id === 'KhaZix') return '95% center';
-                      if (c.id === 'Wukong') return '90% center';
-                      return CHAMPION_POSITIONS[c.id] || 'center';
-                    })()
-                  }}
-                  onLoad={() => {
-                    console.log(`Görsel yüklendi: ${c.id} -> pozisyon: ${(() => {
-                      if (c.id === 'KhaZix') return '95% center';
-                      if (c.id === 'Wukong') return '90% center';
-                      return CHAMPION_POSITIONS[c.id] || 'center';
-                    })()}`);
-                  }}
-                  loading="lazy"
-                  onError={(e) => {
-                    console.error(`Görsel yüklenemedi: ${c.id} -> ${getChampionImageFilename(c.id)}.jpg`);
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              </div>
-              <div className="p-2 text-center">
-                <p className="text-xs font-medium text-gray-300 truncate">{c.name}</p>
-              </div>
+  <img
+    src={`./champions/${c.id === 'KhaZix' ? 'khazix' : c.id === 'MonkeyKing' ? 'wukong' : getChampionImageFilename(c.id)}.jpg`}
+    alt={c.name}
+    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+    style={{
+      objectPosition: (() => {
+        if (c.id === 'KhaZix') return '95% center';
+        if (c.id === 'MonkeyKing') return '80% center';
+        return CHAMPION_POSITIONS[c.id] || 'center';
+      })()
+    }}
+    onLoad={() => {
+      console.log(`Görsel yüklendi: ${c.id} -> pozisyon: ${(() => {
+        if (c.id === 'KhaZix') return '95% center';
+        if (c.id === 'MonkeyKing') return '80% center';
+        return CHAMPION_POSITIONS[c.id] || 'center';
+      })()}`);
+    }}
+    loading="lazy"
+    onError={(e) => {
+      console.error(`Görsel yüklenemedi: ${c.id} -> ${getChampionImageFilename(c.id)}.jpg`);
+      (e.target as HTMLImageElement).style.display = 'none';
+    }}
+  />
+  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent pt-16 pb-2 px-2">
+    <p className="text-xs font-medium text-white truncate">{c.name}</p>
+  </div>
+</div>
             </button>
           ))}
         </div>

@@ -170,7 +170,10 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js')
     },
     autoHideMenuBar: true,
-    icon: path.join(__dirname, 'build', 'icon.png')
+    icon: path.join(
+  app.isPackaged ? process.resourcesPath : __dirname,
+  app.isPackaged ? 'icon.ico' : 'build/icon.ico'
+)
   })
 
   // Development modunda DevTools aç

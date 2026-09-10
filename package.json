@@ -55,10 +55,13 @@
       "wad.js",
       "package.json"
     ],
+    "extraResources": [
+      { "from": "build/icon.ico", "to": "icon.ico" }
+    ],
     "win": {
       "target": "nsis",
       "signAndEditExecutable": false,
-      "icon": "build/hiqu.ico"
+      "icon": "build/icon.ico"
     },
     "nsis": {
       "oneClick": false,
