@@ -412,10 +412,66 @@ export default function App() {
   const [toasts, setToasts] = useState<Toast[]>([])
   const toastId = useRef(0)
 
+  // Multi-select mode for downloaded tab
+  const [selectionMode, setSelectionMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
   const addToast = (type: Toast['type'], message: string) => {
     const id = ++toastId.current
     setToasts((prev) => [...prev, { id, type, message }])
     window.setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000)
+  }
+
+  // Multi-select handlers
+  const toggleSelection = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
+
+  const handleDeleteAllDownloaded = async () => {
+    if (!window.electronAPI) return
+    if (downloadedMetas.length === 0) {
+      addToast('info', 'İndirilen skin yok')
+      return
+    }
+
+    for (const meta of downloadedMetas) {
+      const res = await window.electronAPI.removeSkin({ skinId: meta.id })
+      if (!res.success) {
+        addToast('error', `"${meta.name}" silinemedi: ${res.error || 'Bilinmeyen hata'}`)
+      }
+    }
+    addToast('success', 'Tüm indirilenler silindi')
+    refreshDownloaded()
+  }
+
+  const handleDeleteSelected = async () => {
+    if (!window.electronAPI) return
+    if (selectedIds.size === 0) {
+      addToast('info', 'Seçilen skin yok')
+      return
+    }
+
+    for (const id of selectedIds) {
+      const meta = downloadedMetas.find((m) => m.id === id)
+      if (meta) {
+        const res = await window.electronAPI.removeSkin({ skinId: id })
+        if (!res.success) {
+          addToast('error', `"${meta.name}" silinemedi: ${res.error || 'Bilinmeyen hata'}`)
+        }
+      }
+    }
+    addToast('success', 'Seçilenler silindi')
+    setSelectedIds(new Set())
+    setSelectionMode(false)
+    refreshDownloaded()
   }
 
   // Türetilmiş set'ler
@@ -510,6 +566,35 @@ export default function App() {
       .then(setChampionSkins)
       .finally(() => setLoadingSkins(false))
   }
+
+  const [showRandomMenu, setShowRandomMenu] = useState(false)
+
+const handleRandomChampion = () => {
+  if (champions.length === 0) return
+  const randomChamp = champions[Math.floor(Math.random() * champions.length)]
+  selectChampion(randomChamp)
+  setTab('champions')
+  setShowRandomMenu(false)
+}
+
+const handleRandomSkin = async () => {
+  if (champions.length === 0) return
+  const randomChamp = champions[Math.floor(Math.random() * champions.length)]
+  setShowRandomMenu(false)
+  setLoadingSkins(true)
+  try {
+    const skins = await fetchChampionSkins(randomChamp.id)
+    setSelectedChampion(randomChamp)
+    setChampionSkins(skins)
+    setTab('champions')
+    if (skins.length > 0) {
+      const randomSkin = skins[Math.floor(Math.random() * skins.length)]
+      setModalMeta(metaForSkin(randomSkin, randomChamp))
+    }
+  } finally {
+    setLoadingSkins(false)
+  }
+}
 
   const setAdd = (set: Set<string>, id: string) => new Set(set).add(id)
   const setRemove = (set: Set<string>, id: string) => {
@@ -693,6 +778,24 @@ export default function App() {
     }
   }
 
+  // --- Patchleri Durdur: tüm aktif skinleri pasif et ---
+  const handleStopPatches = async () => {
+    if (!window.electronAPI) return
+    const activeIds = Array.from(activeSet)
+    if (activeIds.length === 0) {
+      addToast('info', 'Aktif skin yok')
+      return
+    }
+
+    for (const id of activeIds) {
+      const res = await window.electronAPI.deactivateSkin({ skinId: id })
+      if (!res.success) {
+        addToast('error', res.error || 'Skin pasif edilemedi')
+      }
+    }
+    addToast('success', 'Tüm patchler durduruldu')
+  }
+
   // --- Ayarlar ---
 
   const handleBrowse = async (field: 'patcherPath' | 'dllPath' | 'gamePath') => {
@@ -716,10 +819,18 @@ export default function App() {
   const handleCheckUpdate = async () => {
     if (!window.electronAPI) return
     setCheckingUpdate(true)
-    const res = await window.electronAPI.checkForUpdates()
-    setCheckingUpdate(false)
-    if (!res?.success && !updateAvailable && !updateDownloaded) {
-      addToast('info', res?.message || 'Güncelleme kontrol edilemedi')
+    try {
+      const res = await window.electronAPI.checkForUpdates()
+      setCheckingUpdate(false)
+      
+      if (res?.success) {
+        addToast('success', 'Güncelleme kontrolü tamamlandı')
+      } else {
+        addToast('error', res?.error || 'Güncelleme kontrolü başarısız')
+      }
+    } catch (error) {
+      setCheckingUpdate(false)
+      addToast('error', 'Güncelleme kontrolü sırasında hata oluştu')
     }
   }
 
@@ -731,7 +842,13 @@ export default function App() {
     m.name.toLowerCase().includes(searchLower) ||
     m.championName.toLowerCase().includes(searchLower)
 
-  const skinGrid = (metas: SkinMeta[], emptyIcon: string, emptyTitle: string, emptyHint: string) =>
+  const skinGrid = (
+    metas: SkinMeta[],
+    emptyIcon: string,
+    emptyTitle: string,
+    emptyHint: string,
+    showManagement: boolean = false
+  ) =>
     metas.length === 0 ? (
       <div className="h-full flex flex-col items-center justify-center text-center py-20">
         <span className="text-5xl mb-4 opacity-60">{emptyIcon}</span>
@@ -739,23 +856,56 @@ export default function App() {
         <p className="text-gray-600 text-sm mt-1 max-w-xs">{emptyHint}</p>
       </div>
     ) : (
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
-        {metas.map((meta) => (
-          <SkinCard
-            key={meta.id}
-            meta={meta}
-            isDownloaded={downloadedIds.has(meta.id)}
-            isActive={activeSet.has(meta.id)}
-            isFavorite={favoriteIds.has(meta.id)}
-            inQueue={queueIds.has(meta.id)}
-            isDownloading={downloading.has(meta.id)}
-            onOpen={() => setModalMeta(meta)}
-            onToggleFavorite={() => toggleFavorite(meta)}
-            onToggleQueue={() => toggleQueue(meta)}
-            onDownload={() => handleDownload(meta)}
-          />
-        ))}
-      </div>
+      <>
+        {showManagement && (
+          <div className="flex items-center gap-2 mb-4">
+            <button
+              onClick={() => setSelectionMode(!selectionMode)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                selectionMode
+                  ? 'bg-sky-500/20 border border-sky-500/40 text-sky-300'
+                  : 'bg-white/[0.04] text-gray-400 hover:bg-white/[0.08]'
+              }`}
+            >
+              {selectionMode ? '✓ Seçim Kapat' : '☐ Seç'}
+            </button>
+            {selectionMode && selectedIds.size > 0 && (
+              <button
+                onClick={handleDeleteSelected}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition"
+              >
+                🗑 Seçilenleri Sil ({selectedIds.size})
+              </button>
+            )}
+            <button
+              onClick={handleDeleteAllDownloaded}
+              className="ml-auto px-4 py-2 rounded-lg text-sm font-medium bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition"
+            >
+              🗑 Hepsini Sil
+            </button>
+          </div>
+        )}
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+          {metas.map((meta) => (
+            <SkinCard
+              key={meta.id}
+              meta={meta}
+              isDownloaded={downloadedIds.has(meta.id)}
+              isActive={activeSet.has(meta.id)}
+              isFavorite={favoriteIds.has(meta.id)}
+              inQueue={queueIds.has(meta.id)}
+              isDownloading={downloading.has(meta.id)}
+              isSelectable={selectionMode}
+              isSelected={selectedIds.has(meta.id)}
+              onSelect={() => toggleSelection(meta.id)}
+              onOpen={() => setModalMeta(meta)}
+              onToggleFavorite={() => toggleFavorite(meta)}
+              onToggleQueue={() => toggleQueue(meta)}
+              onDownload={() => handleDownload(meta)}
+            />
+          ))}
+        </div>
+      </>
     )
 
   const headerTitle =
@@ -855,11 +1005,12 @@ export default function App() {
       downloadedMetas.filter(metaMatches),
       '📦',
       'İndirilmiş skin yok',
-      'İndirdiğiniz skinler burada görünecek. İndirme, skini otomatik aktif ETMEZ.'
+      'İndirdiğiniz skinler burada görünecek. İndirme, skini otomatik aktif ETMEZ.',
+      true
     )
   }
   return (
-    <div className="h-screen w-screen flex flex-col bg-[#0a0d14] text-gray-100 overflow-hidden select-none">
+    <div className="h-screen w-screen flex flex-col bg-[#0f0f11] text-gray-100 overflow-hidden select-none">
       <div className="flex flex-1 min-h-0">
         <Sidebar
           tab={tab}
@@ -888,7 +1039,37 @@ export default function App() {
         <main className="flex-1 min-w-0 flex flex-col">
           {/* Üst bar: başlık + arama */}
           <header className="shrink-0 flex items-center gap-4 px-5 py-3 border-b border-white/[0.06] bg-white/[0.02]">
+          <div className="relative">
+  <button
+    onClick={() => setShowRandomMenu((v) => !v)}
+    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-gray-300 hover:bg-sky-500/15 hover:border-sky-500/30 hover:text-sky-300 transition"
+  >
+    🎲 Rastgele
+  </button>
+  {showRandomMenu && (
+    <>
+      <div className="fixed inset-0 z-40" onClick={() => setShowRandomMenu(false)}></div>
+      <div className="absolute top-full left-0 mt-2 z-50 w-44 bg-[#1c1c1f] border border-white/[0.08] rounded-xl shadow-2xl shadow-black/50 overflow-hidden">
+        <button
+          onClick={handleRandomChampion}
+          className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition"
+        >
+          🧙 Rastgele Karakter
+        </button>
+        <button
+          onClick={handleRandomSkin}
+          className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition border-t border-white/[0.06]"
+        >
+          🎨 Rastgele Skin
+        </button>
+      </div>
+    </>
+  )}
+</div>
             <h1 className="text-lg font-bold tracking-tight truncate">{headerTitle}</h1>
+            {tab === 'champions' && !selectedChampion && (
+  <span className="text-sm text-gray-500">({champions.length})</span>
+)}
             {tab === 'champions' && selectedChampion && (
               <span className="text-xs text-gray-500 bg-white/[0.05] border border-white/[0.08] rounded-full px-2 py-0.5">
                 {championSkins.length} skin
@@ -919,6 +1100,7 @@ export default function App() {
         onRemoveItem={removeFromQueue}
         onClear={clearQueue}
         onPatch={handlePatch}
+        onStopPatches={handleStopPatches}
       />
 
       {/* Skin detay modalı */}

@@ -51,7 +51,7 @@ export default function SkinModal({
       }}
     >
       <div
-        className="bg-[#12161f] border border-white/[0.1] rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl shadow-black/60 fade-in"
+        className="bg-[#18181b] border border-white/[0.1] rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl shadow-black/60 fade-in"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Büyük skin görseli */}
@@ -68,7 +68,7 @@ export default function SkinModal({
           ) : (
             <div className="w-full h-full flex items-center justify-center text-5xl text-gray-600">🎮</div>
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#12161f] via-transparent to-transparent"></div>
+          <div className="absolute inset-0 bg-gradient-to-t from-[#18181b] via-transparent to-transparent"></div>
           <button
             onClick={onClose}
             className="absolute top-3 right-3 w-9 h-9 flex items-center justify-center rounded-full bg-black/60 backdrop-blur text-gray-300 hover:text-white hover:bg-black/80 transition text-xl leading-none"

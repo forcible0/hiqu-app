@@ -447,13 +447,17 @@ function spawnPatcher(overlayDir, settings, skinIds) {
   })
   patcherProcess = child
 
+    let stopped = false
   const sendCmd = (cmd) => {
+    if (stopped || !child.stdin.writable) return
     try { child.stdin.write(cmd + '\n') } catch { /* süreç kapandıysa yoksay */ }
   }
-  setTimeout(() => sendCmd('config loglevel 4096'), 300)
-  setTimeout(() => sendCmd('config flags 12'), 400)
-  setTimeout(() => sendCmd(`config prefix ${overlayDir.replace(/[\\/]+$/, '')}\\`), 500)
-  setTimeout(() => sendCmd('start scan'), 700)
+  const startupTimers = [
+    setTimeout(() => sendCmd('config loglevel 4096'), 300),
+    setTimeout(() => sendCmd('config flags 12'), 400),
+    setTimeout(() => sendCmd(`config prefix ${overlayDir.replace(/[\\/]+$/, '')}\\`), 500),
+    setTimeout(() => sendCmd('start scan'), 700)
+  ]
 
   // Tanı için host çıktılarını log dosyasına yaz
   const logFile = path.join(app.getPath('userData'), 'patcher.log')
@@ -475,11 +479,9 @@ function spawnPatcher(overlayDir, settings, skinIds) {
       }
     }
   })
-  child.stderr.on('data', (d) => appendLog(d))
-
-  // Patcher kapanırken protokol üzerinden düzgün durması için 'stop' gönderilecek;
-  // kill() çocuğu zorla öldürür — bu yüzden stop fonksiyonunu da tut
-  child.stopPatcher = () => {
+    child.stopPatcher = () => {
+    stopped = true
+    for (const t of startupTimers) clearTimeout(t)
     sendCmd('stop')
     setTimeout(() => { try { child.stdin.end() } catch { /* yoksay */ } }, 300)
     setTimeout(() => { try { child.kill() } catch { /* yoksay */ } }, 3000)

@@ -9,6 +9,7 @@ interface QueueBarProps {
   onRemoveItem: (id: string) => void
   onClear: () => void
   onPatch: () => void
+  onStopPatches: () => void
 }
 
 // Alttaki yatay skin sırası — "Patchle" butonu tüm kuyruğu tek seferde aktif eder
@@ -19,10 +20,11 @@ export default function QueueBar({
   patchProgress,
   onRemoveItem,
   onClear,
-  onPatch
+  onPatch,
+  onStopPatches
 }: QueueBarProps) {
   return (
-    <div className="shrink-0 border-t border-sky-500/20 bg-[#0c1017]/95 backdrop-blur-md">
+    <div className="shrink-0 border-t border-white/[0.08] bg-[#0c0c0e]/95 backdrop-blur-md">
       <div className="flex items-center gap-4 px-4 py-3">
         {/* Sıra başlığı */}
         <div className="flex items-center gap-2 shrink-0 w-24">
@@ -83,7 +85,7 @@ export default function QueueBar({
           )}
         </div>
 
-        {/* Aksiyonlar: Temizle + Patchle */}
+        {/* Aksiyonlar: Temizle + Patchle + Durdur */}
         <div className="shrink-0 flex items-center gap-2">
           {queue.length > 0 && (
             <button
@@ -92,6 +94,15 @@ export default function QueueBar({
               className="text-xs text-gray-400 hover:text-red-300 border border-white/[0.1] hover:border-red-500/40 rounded-lg px-3 py-2.5 transition disabled:opacity-40"
             >
               Temizle
+            </button>
+          )}
+          {activeIds.size > 0 && (
+            <button
+              onClick={onStopPatches}
+              disabled={isPatching}
+              className="text-xs text-gray-400 hover:text-amber-300 border border-white/[0.1] hover:border-amber-500/40 rounded-lg px-3 py-2.5 transition disabled:opacity-40"
+            >
+              ⏸ Durdur
             </button>
           )}
           <button

@@ -8,6 +8,9 @@ interface SkinCardProps {
   isFavorite: boolean
   inQueue: boolean
   isDownloading: boolean
+  isSelectable: boolean
+  isSelected: boolean
+  onSelect: () => void
   onOpen: () => void
   onToggleFavorite: () => void
   onToggleQueue: () => void
@@ -22,6 +25,9 @@ export default function SkinCard({
   isFavorite,
   inQueue,
   isDownloading,
+  isSelectable,
+  isSelected,
+  onSelect,
   onOpen,
   onToggleFavorite,
   onToggleQueue,
@@ -31,12 +37,12 @@ export default function SkinCard({
 
   return (
     <div
-  onClick={onOpen}
-  className="group relative cursor-pointer transition-shadow duration-300"
+  onClick={isSelectable ? (e) => { e.stopPropagation(); onSelect(); } : onOpen}
+  className={`group relative cursor-pointer transition-shadow duration-300 ${isSelectable ? 'cursor-pointer' : ''}`}
 >
   <div
     className={`relative bg-white/[0.03] border rounded-2xl overflow-hidden transition-all duration-300 hover:border-sky-400/60 hover:shadow-xl hover:shadow-sky-500/10 ${
-      isActive ? 'border-green-500/50' : 'border-white/[0.06]'
+      isActive ? 'border-green-500/50' : isSelectable && isSelected ? 'border-sky-500/50' : 'border-white/[0.06]'
     }`}
   >
       <div className="relative aspect-video bg-white/[0.03] overflow-hidden">
@@ -75,6 +81,21 @@ export default function SkinCard({
           {isFavorite ? '♥' : '♡'}
         </button>
 
+        {/* Seçim modu için checkbox */}
+        {isSelectable && (
+          <div className="absolute top-2 left-2 z-10">
+            <div
+              className={`w-6 h-6 rounded border-2 flex items-center justify-center transition ${
+                isSelected
+                  ? 'bg-sky-500 border-sky-500 text-white'
+                  : 'bg-black/50 border-gray-400'
+              }`}
+            >
+              {isSelected && <span className="text-sm">✓</span>}
+            </div>
+          </div>
+        )}
+
         {/* Durum rozetleri (sağ üst) */}
         <div className="absolute top-2 right-2 flex flex-col items-end gap-1 pointer-events-none">
           {isDownloading && (
@@ -104,7 +125,7 @@ export default function SkinCard({
                 onDownload()
               }}
               title="İndir"
-              className="w-9 h-9 rounded-full bg-sky-600/90 hover:bg-sky-500 text-white text-sm flex items-center justify-center shadow-lg shadow-sky-500/30 transition"
+              className="w-9 h-9 rounded-full bg-black/60 text-gray-200 text-sm flex items-center justify-center shadow-lg shadow-black/40 hover:bg-sky-600/90 hover:text-white hover:shadow-sky-500/30 transition"
             >
               ⬇
             </button>
