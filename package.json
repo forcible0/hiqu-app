@@ -42,35 +42,35 @@
     "react-dom": "^18.2.0"
   },
   "build": {
-    "appId": "com.hiqu.app",
-    "productName": "Hiqu",
-    "directories": {
-      "output": "release",
-      "buildResources": "build"
-    },
-    "files": [
-      "dist/**/*",
-      "main.js",
-      "preload.js",
-      "wad.js",
-      "package.json"
-    ],
-    "extraResources": [
-      { "from": "build/icon.ico", "to": "icon.ico" }
-    ],
-    "win": {
-      "target": "nsis",
-      "signAndEditExecutable": false,
-      "icon": "build/icon.ico"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    },
-    "publish": {
-      "provider": "github",
-      "owner": "forcible0",
-      "repo": "hiqu-app"
-    }
+  "appId": "com.hiqu.app",
+  "productName": "Hiqu",
+  "icon": "build/icon.ico",
+  "directories": {
+    "output": "release",
+    "buildResources": "build"
+  },
+  "files": [
+    "dist/**/*",
+    "main.js",
+    "preload.js",
+    "wad.js",
+    "package.json"
+  ],
+  "win": {
+    "target": "nsis",
+    "icon": "build/icon.ico"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "installerIcon": "build/icon.ico",
+    "uninstallerIcon": "build/icon.ico",
+    "uninstallDisplayName": "Hiqu"
+  },
+  "publish": {
+    "provider": "github",
+    "owner": "forcible0",
+    "repo": "hiqu-app"
+  }
   }
 }
