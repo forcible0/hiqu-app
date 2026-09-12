@@ -83,7 +83,7 @@ export default function SkinCard({
 
         {/* Seçim modu için checkbox */}
         {isSelectable && (
-          <div className="absolute top-2 left-2 z-10">
+          <div className="absolute bottom-2 right-2 z-10">
             <div
               className={`w-6 h-6 rounded border-2 flex items-center justify-center transition ${
                 isSelected

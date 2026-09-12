@@ -472,12 +472,12 @@ function spawnPatcher(overlayDir, settings, skinIds) {
     const lines = stdoutBuf.split(/\r?\n/)
     stdoutBuf = lines.pop() || ''
     for (const line of lines) {
-      if (/error|failed/i.test(line) && !/error$/i.test(line.trim())) {
-        sendToRenderer('patch-status', { state: 'error', message: line.trim() })
-      } else if (/hook installed|\binjected\b|overlay verified|dll attached/i.test(line)) {
-        sendToRenderer('patch-status', { state: 'started', message: line.trim() })
-      }
-    }
+  if (/\bERROR\b/.test(line)) {
+    sendToRenderer('patch-status', { state: 'error', message: line.trim() })
+  } else if (/hook installed|\binjected\b|overlay verified|dll attached/i.test(line)) {
+    sendToRenderer('patch-status', { state: 'started', message: line.trim() })
+  }
+}
   })
     child.stopPatcher = () => {
     stopped = true
@@ -575,6 +575,40 @@ ipcMain.handle('download-skin', async (_event, { championKey, skinId, meta }) =>
       all[skinId] = {
         id: skinId,
         name: meta.name || `Skin ${skinId}`,
+        num: meta.num ?? 0,
+        championId: meta.championId || '',
+        championKey,
+        championName: meta.championName || '',
+        downloadedAt: Date.now()
+      }
+      writeSkinsMeta(all)
+    }
+    return { success: true, path: dest }
+  } catch (err) {
+    fs.unlink(dest, () => {})
+    return { success: false, error: err.message }
+  }
+})
+
+// Chroma indirme: chromalar ana skinin alt klasöründe durur.
+//   skins/{championKey}/{skinId}/{chromaId}/{chromaId}.fantome
+ipcMain.handle('download-chroma', async (_event, { championKey, skinId, chromaId, meta }) => {
+  if (!championKey || !skinId || !chromaId) {
+    return { success: false, error: 'Geçersiz şampiyon, skin veya chroma ID' }
+  }
+  const url = `${LEAGUE_SKINS_BASE}/${championKey}/${skinId}/${chromaId}/${chromaId}.fantome`
+  const dest = path.join(SKINS_DIR, `${chromaId}.fantome`)
+  try {
+    fs.mkdirSync(SKINS_DIR, { recursive: true })
+    await downloadFile(url, dest, (percent) => {
+      sendToRenderer('skin-download-progress', { skinId: chromaId, percent })
+    })
+    // Meta bilgisini kaydet (İndirilenler sekmesi için) — isim "Ana skin - Chroma"
+    if (meta && typeof meta === 'object') {
+      const all = readSkinsMeta()
+      all[chromaId] = {
+        id: chromaId,
+        name: meta.name || `Chroma ${chromaId}`,
         num: meta.num ?? 0,
         championId: meta.championId || '',
         championKey,

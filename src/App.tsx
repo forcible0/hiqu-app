@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Skin, SkinItem, SkinMeta, AppSettings, TabKey, Toast, ApplySkinsResult } from './types'
-import { fetchChampions, fetchChampionSkins } from './api'
+import { Skin, SkinItem, SkinMeta, AppSettings, TabKey, Toast, ApplySkinsResult, Chroma } from './types'
+import { fetchChampions, fetchChampionSkins, fetchSkinChromas } from './api'
 import Sidebar from './components/Sidebar'
 import SkinCard from './components/SkinCard'
 import SkinModal from './components/SkinModal'
@@ -401,6 +401,9 @@ export default function App() {
 
   // Modal
   const [modalMeta, setModalMeta] = useState<SkinMeta | null>(null)
+  const [modalChromas, setModalChromas] = useState<Chroma[]>([])
+const [loadingChromas, setLoadingChromas] = useState(false)
+const [selectedChromaId, setSelectedChromaId] = useState<string | null>(null)
 
   // Ayarlar & güncelleme
   const [settings, setSettings] = useState<AppSettings>({})
@@ -503,6 +506,26 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  useEffect(() => {
+  setSelectedChromaId(null)
+  if (!modalMeta) {
+    setModalChromas([])
+    return
+  }
+  let cancelled = false
+  setLoadingChromas(true)
+  fetchSkinChromas(modalMeta.id)
+    .then((chromas) => {
+      if (!cancelled) setModalChromas(chromas)
+    })
+    .finally(() => {
+      if (!cancelled) setLoadingChromas(false)
+    })
+  return () => {
+    cancelled = true
+  }
+}, [modalMeta])
+
   // Favoriler ve sıra kalıcılığı
   useEffect(() => {
     localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites))
@@ -542,10 +565,11 @@ export default function App() {
       setUpdateAvailable(false)
       addToast('success', 'Güncelleme indirildi! Yeniden başlatmaya hazır.')
     })
-    window.electronAPI.onUpdateError(() => {
-      setCheckingUpdate(false)
-      addToast('error', 'Güncelleme kontrolü başarısız')
-    })
+    window.electronAPI.onUpdateError((_, err) => {
+  setCheckingUpdate(false)
+  console.error('Güncelleme hatası:', err)
+  addToast('error', `Güncelleme ba\u015far\u0131s\u0131z: ${err?.message || err || 'bilinmeyen hata'}`)
+})
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
   // --- Yardımcılar ---
@@ -661,6 +685,35 @@ const handleRandomSkin = async () => {
       addToast('error', res.error || 'İndirme başarısız')
     }
   }
+  
+  const handleDownloadChroma = async (baseMeta: SkinMeta, chroma: Chroma) => {
+  if (!window.electronAPI) return
+  if (downloading.has(chroma.id) || downloadedIds.has(chroma.id)) return
+  if (!baseMeta.championKey) {
+    addToast('error', 'Bu skin için indirme bilgisi eksik (şampiyon anahtarı yok)')
+    return
+  }
+  setDownloading((prev) => setAdd(prev, chroma.id))
+  setDownloadProgress((prev) => ({ ...prev, [chroma.id]: 0 }))
+  const res = await window.electronAPI.downloadChroma({
+    championKey: baseMeta.championKey,
+    skinId: baseMeta.id,
+    chromaId: chroma.id,
+    meta: { ...baseMeta, id: chroma.id, name: `${baseMeta.name} — ${chroma.name}` }
+  })
+  setDownloading((prev) => setRemove(prev, chroma.id))
+  setDownloadProgress((prev) => {
+    const next = { ...prev }
+    delete next[chroma.id]
+    return next
+  })
+  if (res.success) {
+    addToast('success', `"${chroma.name}" indirildi`)
+    refreshDownloaded()
+  } else {
+    addToast('error', res.error || 'İndirme başarısız')
+  }
+}
 
   // --- Aktivasyon (tekil) ---
 
@@ -1104,27 +1157,39 @@ const handleRandomSkin = async () => {
       />
 
       {/* Skin detay modalı */}
-      {modalMeta && (
-        <SkinModal
-          meta={modalMeta}
-          isDownloaded={downloadedIds.has(modalMeta.id)}
-          downloadProgress={
-            downloading.has(modalMeta.id) ? downloadProgress[modalMeta.id] ?? 0 : undefined
-          }
-          isActive={activeSet.has(modalMeta.id)}
-          isFavorite={favoriteIds.has(modalMeta.id)}
-          inQueue={queueIds.has(modalMeta.id)}
-          isApplying={applyingIds.has(modalMeta.id)}
-          isRemoving={removingIds.has(modalMeta.id)}
-          onClose={() => setModalMeta(null)}
-          onDownload={() => handleDownload(modalMeta)}
-          onApply={() => handleApply(modalMeta)}
-          onDeactivate={() => handleDeactivate(modalMeta)}
-          onRemove={() => handleRemove(modalMeta)}
-          onToggleFavorite={() => toggleFavorite(modalMeta)}
-          onToggleQueue={() => toggleQueue(modalMeta)}
-        />
-      )}
+      {modalMeta && (() => {
+  const selectedChroma = modalChromas.find((c) => c.id === selectedChromaId) ?? null
+  const activeModalMeta: SkinMeta = selectedChroma
+  ? { ...modalMeta, id: selectedChroma.id }
+  : modalMeta
+  return (
+    <SkinModal
+      meta={activeModalMeta}
+      isDownloaded={downloadedIds.has(activeModalMeta.id)}
+      downloadProgress={
+        downloading.has(activeModalMeta.id) ? downloadProgress[activeModalMeta.id] ?? 0 : undefined
+      }
+      isActive={activeSet.has(activeModalMeta.id)}
+      isFavorite={favoriteIds.has(activeModalMeta.id)}
+      inQueue={queueIds.has(activeModalMeta.id)}
+      isApplying={applyingIds.has(activeModalMeta.id)}
+      isRemoving={removingIds.has(activeModalMeta.id)}
+      onClose={() => setModalMeta(null)}
+      onDownload={() =>
+        selectedChroma ? handleDownloadChroma(modalMeta, selectedChroma) : handleDownload(modalMeta)
+      }
+      onApply={() => handleApply(activeModalMeta)}
+      onDeactivate={() => handleDeactivate(activeModalMeta)}
+      onRemove={() => handleRemove(activeModalMeta)}
+      onToggleFavorite={() => toggleFavorite(activeModalMeta)}
+      onToggleQueue={() => toggleQueue(activeModalMeta)}
+      chromas={modalChromas}
+      loadingChromas={loadingChromas}
+      selectedChromaId={selectedChromaId}
+      onSelectChroma={setSelectedChromaId}
+    />
+  )
+})()}
 
       <Toasts toasts={toasts} />
     </div>

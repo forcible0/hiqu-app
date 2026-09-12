@@ -1,10 +1,11 @@
-import { SkinMeta } from '../types'
+import { useEffect, useRef, useState } from 'react'
+import { SkinMeta, Chroma } from '../types'
 import { getSkinImageUrl } from '../api'
 
 interface SkinModalProps {
   meta: SkinMeta
   isDownloaded: boolean
-  downloadProgress?: number // tanımlıysa indirme sürüyor
+  downloadProgress?: number
   isActive: boolean
   isFavorite: boolean
   inQueue: boolean
@@ -17,6 +18,10 @@ interface SkinModalProps {
   onRemove: () => void
   onToggleFavorite: () => void
   onToggleQueue: () => void
+  chromas: Chroma[]
+  loadingChromas?: boolean
+  selectedChromaId: string | null
+  onSelectChroma: (chromaId: string | null) => void
 }
 
 const Spinner = () => (
@@ -38,22 +43,37 @@ export default function SkinModal({
   onDeactivate,
   onRemove,
   onToggleFavorite,
-  onToggleQueue
+  onToggleQueue,
+  chromas,
+  loadingChromas,
+  selectedChromaId,
+  onSelectChroma
 }: SkinModalProps) {
   const isDownloading = downloadProgress !== undefined
   const imageUrl = getSkinImageUrl(meta.num, meta.championId)
+  const modalRef = useRef<HTMLDivElement>(null)
+const [modalHeight, setModalHeight] = useState<number>()
+
+useEffect(() => {
+  if (!modalRef.current) return
+  const el = modalRef.current
+  const observer = new ResizeObserver((entries) => {
+    setModalHeight(entries[0].contentRect.height)
+  })
+  observer.observe(el)
+  return () => observer.disconnect()
+}, [])
 
   return (
-    <div
-      className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-      onClick={() => {
-        if (!isDownloading) onClose()
-      }}
-    >
-      <div
-        className="bg-[#18181b] border border-white/[0.1] rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl shadow-black/60 fade-in"
-        onClick={(e) => e.stopPropagation()}
-      >
+  <div
+    className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+    onClick={() => {
+      if (!isDownloading) onClose()
+    }}
+  >
+    <div className="flex items-start gap-3" onClick={(e) => e.stopPropagation()}>
+      <div ref={modalRef} className="bg-[#18181b] border border-white/[0.1] rounded-2xl max-w-2xl w-full overflow-hidden shadow-2xl shadow-black/60 fade-in">
+    
         {/* Büyük skin görseli */}
         <div className="relative aspect-video bg-black/50">
           {imageUrl ? (
@@ -220,8 +240,71 @@ export default function SkinModal({
             <span className="text-sky-400 font-semibold">⚡ Patchle</span> butonu ile sıradaki tüm
             skinleri tek seferde aktif edebilirsiniz.
           </p>
-        </div>
+                </div>
       </div>
+
+      {chromas.length > 0 && (
+        <div
+  className="w-72 shrink-0 bg-[#18181b] border border-white/[0.1] rounded-2xl shadow-2xl shadow-black/60 p-3 overflow-y-auto"
+  style={{ maxHeight: modalHeight }}
+>
+          <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2 px-1">Chromalar</p>
+          <div className="space-y-1.5">
+  <button
+    onClick={() => onSelectChroma(null)}
+    className={`w-full flex items-center gap-2.5 rounded-lg px-2 py-1.5 border-l-4 transition ${
+      selectedChromaId === null
+        ? 'border-sky-400 bg-sky-500/10'
+        : 'border-white/[0.15] bg-white/[0.02] hover:bg-white/[0.05]'
+    }`}
+  >
+    <div className="w-12 h-12 rounded-md bg-white/[0.06] flex items-center justify-center text-gray-400 text-base shrink-0">
+  ⟲
+</div>
+<div className="min-w-0 text-left">
+  <p className="text-sm font-medium text-gray-200 truncate">Orijinal</p>
+</div>
+  </button>
+  {chromas.map((chroma) => (
+    <button
+      key={chroma.id}
+      onClick={() => onSelectChroma(chroma.id)}
+      className={`w-full flex items-center gap-2.5 rounded-lg px-2 py-1.5 border-l-4 transition ${
+        selectedChromaId === chroma.id
+          ? 'bg-sky-500/10'
+          : 'border-white/[0.15] bg-white/[0.02] hover:bg-white/[0.05]'
+      }`}
+      style={{
+        borderLeftColor:
+          selectedChromaId === chroma.id ? undefined : chroma.colors?.[0] || undefined
+      }}
+    >
+      {chroma.imageUrl ? (
+        <img
+  src={chroma.imageUrl}
+  alt={chroma.name}
+  className="w-12 h-12 rounded-md object-cover shrink-0 bg-white/[0.06]"
+  onError={(e) => {
+    ;(e.target as HTMLImageElement).style.display = 'none'
+  }}
+/>
+      ) : (
+        <div
+  className="w-12 h-12 rounded-md shrink-0"
+  style={{ background: chroma.colors?.[0] || '#333' }}
+></div>
+      )}
+      <div className="min-w-0 text-left">
+  <p className="text-sm font-medium text-gray-200 truncate">{chroma.name}</p>
+  <p className="text-xs text-gray-500">ID: {chroma.id}</p>
+</div>
+    </button>
+  ))}
+</div>
+          {loadingChromas && <p className="text-[11px] text-gray-500 mt-2 px-1">Yükleniyor...</p>}
+        </div>
+      )}
     </div>
+  </div>
   )
 }

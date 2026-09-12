@@ -36,6 +36,7 @@ interface ElectronAPI {
   // Skin indirme / kaldırma
   getDownloadedSkins: () => Promise<SkinMetaDto[]>;
   downloadSkin: (params: { championKey: string; skinId: string; meta?: SkinMetaDto }) => Promise<{ success: boolean; path?: string; error?: string }>;
+  downloadChroma: (params: { championKey: string; skinId: string; chromaId: string; meta?: SkinMetaDto }) => Promise<{ success: boolean; path?: string; error?: string }>;
   removeSkin: (params: { skinId: string }) => Promise<{ success: boolean; error?: string; wasActive?: boolean }>;
   onRemoveStatus: (callback: (event: any, data: { skinId: string; state: 'started' | 'finished' | 'warning' | 'error'; message?: string }) => void) => void;
   onSkinDownloadProgress: (callback: (event: any, data: { skinId: string; percent: number }) => void) => void;

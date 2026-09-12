@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Skin indirme / kaldırma
   getDownloadedSkins: () => ipcRenderer.invoke('get-downloaded-skins'),
   downloadSkin: (params) => ipcRenderer.invoke('download-skin', params),
+  downloadChroma: (params) => ipcRenderer.invoke('download-chroma', params),
   removeSkin: (params) => ipcRenderer.invoke('remove-skin', params),
   onRemoveStatus: (callback) => ipcRenderer.on('remove-status', callback),
   onSkinDownloadProgress: (callback) => ipcRenderer.on('skin-download-progress', callback),

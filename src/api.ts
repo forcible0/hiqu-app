@@ -1,4 +1,4 @@
-import { SkinItem } from './types';
+import { SkinItem, Chroma } from './types';
 
 const DRAGON_API_BASE = 'https://ddragon.leagueoflegends.com/cdn';
 let currentVersion = '';
@@ -82,12 +82,82 @@ export async function fetchChampionSkins(championId: string): Promise<any[]> {
       .map((skin: any) => ({
         id: skin.id.toString(),
         name: skin.name,
-        num: skin.num
+        num: skin.num,
+        chromas: !!skin.chromas
       }));
     
     return skins;
   } catch (error) {
     console.error('Skinler yüklenirken hata:', error);
     return [];
+  }
+}
+
+// ==================== CHROMA VERİSİ ====================
+// Chroma isimleri/id'leri DDragon'da bulunmaz; CommunityDragon'un skins.json
+// dosyasında her skinin "chromas" dizisi ({id, name, colors}) yer alır.
+// Dosya büyük (~5MB) olduğu için bir kez çekilip bellekte önbelleğe alınır.
+
+const CDRAGON_SKINS_URL =
+  'https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/skins.json'
+
+interface CdBragonSkin {
+  id: number
+  name?: string
+  chromas?: { id: number; name?: string; colors?: string[]; chromaPath?: string }[]
+}
+
+let skinsIndex: Map<number, CdBragonSkin> | null = null
+let skinsIndexPromise: Promise<Map<number, CdBragonSkin>> | null = null
+
+function loadSkinsIndex(): Promise<Map<number, CdBragonSkin>> {
+  if (skinsIndex) return Promise.resolve(skinsIndex)
+  if (!skinsIndexPromise) {
+    skinsIndexPromise = (async () => {
+      const res = await fetch(CDRAGON_SKINS_URL)
+if (!res.ok) throw new Error(`Chroma verisi alınamadı (HTTP ${res.status})`)
+const raw = await res.json()
+const list: CdBragonSkin[] = Array.isArray(raw) ? raw : Object.values(raw)
+const map = new Map<number, CdBragonSkin>()
+for (const s of list) {
+  if (s && typeof s.id === 'number') map.set(s.id, s)
+}
+      skinsIndex = map
+      return map
+    })().catch((err) => {
+      // Hata durumunda promise'i sıfırla ki sonraki deneme tekrar çalışsın
+      skinsIndexPromise = null
+      throw err
+    })
+  }
+  return skinsIndexPromise
+}
+
+// Uygulama açılışında chroma indeksini arka planda önceden çek (fire-and-forget)
+export function preloadSkinIndex(): void {
+  loadSkinsIndex().catch((err) => console.error('Chroma indeksi önceden çekilemedi:', err))
+}
+
+// Belirli bir skinin chroma varyantlarını döndürür
+export async function fetchSkinChromas(skinId: string): Promise<Chroma[]> {
+  try {
+    const idx = await loadSkinsIndex()
+    const skin = idx.get(Number(skinId))
+    if (!skin || !Array.isArray(skin.chromas) || skin.chromas.length === 0) {
+      return []
+    }
+    return skin.chromas.map((c) => ({
+  id: String(c.id),
+  name: c.name || `Chroma ${c.id}`,
+  colors: Array.isArray(c.colors) ? c.colors : [],
+  imageUrl: c.chromaPath
+    ? `https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default${c.chromaPath
+        .replace(/^\/lol-game-data\/assets/i, '')
+        .toLowerCase()}`
+    : undefined
+    }))
+  } catch (error) {
+    console.error('Chromalar yüklenirken hata:', error)
+    return []
   }
 }

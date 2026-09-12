@@ -15,6 +15,15 @@ export interface Skin {
   id: string; // Sayısal skin ID'si (örn. "266001")
   name: string;
   num: number;
+  chromas?: boolean; // Bu skinin chroma varyantları var mı (DDragon)
+}
+
+// Bir skinin chroma varyantı (CommunityDragon'dan gelen isim + renkler)
+export interface Chroma {
+  id: string;
+  name: string;
+  colors?: string[];
+  imageUrl?: string;
 }
 
 // Bir skini her yerde tanımlamak için yeterli kalıcı bilgi.
