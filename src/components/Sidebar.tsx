@@ -131,14 +131,16 @@ const renderChampionRow = (c: (typeof filteredChampions)[number]) => (
         : 'text-gray-400 hover:bg-white/[0.06] hover:text-gray-200 border-l-2 border-transparent'
     }`}
   >
-    <img
-      src={c.image}
-      alt={c.name}
-      className="w-7 h-7 rounded-full flex-shrink-0 transition-transform duration-200 group-hover:scale-110"
-      onError={(e) => {
-        ;(e.target as HTMLImageElement).style.display = 'none'
-      }}
-    />
+    <div className="w-7 h-7 rounded-full flex-shrink-0 overflow-hidden transition-transform duration-200 group-hover:scale-110">
+  <img
+    src={c.image}
+    alt={c.name}
+    className="w-full h-full object-cover scale-[1.35]"
+    onError={(e) => {
+      ;(e.target as HTMLImageElement).style.display = 'none'
+    }}
+  />
+</div>
     <span className="truncate">{c.name}</span>
   </button>
 )

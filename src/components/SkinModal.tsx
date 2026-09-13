@@ -26,7 +26,13 @@ interface SkinModalProps {
 
 const Spinner = () => (
   <span className="animate-spin inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full"></span>
+  
 )
+
+function extractColorName(fullName: string): string {
+  const match = fullName.match(/\(([^)]+)\)\s*$/)
+  return match ? match[1] : fullName
+}
 
 export default function SkinModal({
   meta,
@@ -249,57 +255,53 @@ useEffect(() => {
   style={{ maxHeight: modalHeight }}
 >
           <p className="text-xs font-bold text-gray-400 uppercase tracking-wide mb-2 px-1">Chromalar</p>
-          <div className="space-y-1.5">
+          <div className="grid grid-cols-2 gap-3">
   <button
     onClick={() => onSelectChroma(null)}
-    className={`w-full flex items-center gap-2.5 rounded-lg px-2 py-1.5 border-l-4 transition ${
+    className={`flex flex-col items-center gap-1.5 rounded-xl overflow-hidden border-2 transition p-2 ${
       selectedChromaId === null
         ? 'border-sky-400 bg-sky-500/10'
-        : 'border-white/[0.15] bg-white/[0.02] hover:bg-white/[0.05]'
+        : 'border-white/[0.1] bg-white/[0.02] hover:bg-white/[0.05]'
     }`}
   >
-    <div className="w-12 h-12 rounded-md bg-white/[0.06] flex items-center justify-center text-gray-400 text-base shrink-0">
-  ⟲
-</div>
-<div className="min-w-0 text-left">
-  <p className="text-sm font-medium text-gray-200 truncate">Orijinal</p>
-</div>
+    <div className="aspect-[3/4] w-full rounded-lg bg-white/[0.06] flex items-center justify-center text-gray-400 text-2xl">
+      ⟲
+    </div>
+    <p className="text-xs font-semibold text-gray-300">Orijinal</p>
   </button>
-  {chromas.map((chroma) => (
-    <button
-      key={chroma.id}
-      onClick={() => onSelectChroma(chroma.id)}
-      className={`w-full flex items-center gap-2.5 rounded-lg px-2 py-1.5 border-l-4 transition ${
-        selectedChromaId === chroma.id
-          ? 'bg-sky-500/10'
-          : 'border-white/[0.15] bg-white/[0.02] hover:bg-white/[0.05]'
-      }`}
-      style={{
-        borderLeftColor:
-          selectedChromaId === chroma.id ? undefined : chroma.colors?.[0] || undefined
-      }}
-    >
-      {chroma.imageUrl ? (
-        <img
-  src={chroma.imageUrl}
-  alt={chroma.name}
-  className="w-12 h-12 rounded-md object-cover shrink-0 bg-white/[0.06]"
-  onError={(e) => {
-    ;(e.target as HTMLImageElement).style.display = 'none'
-  }}
-/>
-      ) : (
-        <div
-  className="w-12 h-12 rounded-md shrink-0"
-  style={{ background: chroma.colors?.[0] || '#333' }}
-></div>
-      )}
-      <div className="min-w-0 text-left">
-  <p className="text-sm font-medium text-gray-200 truncate">{chroma.name}</p>
-  <p className="text-xs text-gray-500">ID: {chroma.id}</p>
-</div>
-    </button>
-  ))}
+  {chromas.map((chroma) => {
+    const colorName = extractColorName(chroma.name)
+    return (
+      <button
+        key={chroma.id}
+        onClick={() => onSelectChroma(chroma.id)}
+        className={`flex flex-col items-center gap-1.5 rounded-xl overflow-hidden border-2 transition p-2 ${
+          selectedChromaId === chroma.id
+            ? 'border-sky-400 bg-sky-500/10'
+            : 'border-white/[0.1] bg-white/[0.02] hover:bg-white/[0.05]'
+        }`}
+      >
+        {chroma.imageUrl ? (
+          <img
+            src={chroma.imageUrl}
+            alt={colorName}
+            className="aspect-[3/4] w-full rounded-lg object-cover bg-white/[0.06]"
+            onError={(e) => {
+              ;(e.target as HTMLImageElement).style.display = 'none'
+            }}
+          />
+        ) : (
+          <div
+            className="aspect-[3/4] w-full rounded-lg"
+            style={{ background: chroma.colors?.[0] || '#333' }}
+          ></div>
+        )}
+        <p className="text-xs font-bold truncate w-full text-center text-white">
+  {colorName}
+</p>
+      </button>
+    )
+  })}
 </div>
           {loadingChromas && <p className="text-[11px] text-gray-500 mt-2 px-1">Yükleniyor...</p>}
         </div>
