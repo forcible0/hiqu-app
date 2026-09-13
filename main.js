@@ -440,6 +440,81 @@ function rebuildOverlay(skinIds, gameDir) {
 // flags 12 = OPT_OUT_AH_V1 (4) | FULL_WAD_SCAN (8): anti-skinhack wad taraması başarısız
 // olursa engellemek yerine uyarı verir; ayrıca taramayı en başta yapar.
 // prefix sonuna ayraç eklenir (ltk-manager böyle gönderir; DLL doğrudan üstüne ekleme yapar).
+// ==================== PATCHER OTO-GÜNCELLEME ====================
+const PATCHER_REPO = 'forcible0/hiqu-app'
+const PATCHER_DIR = path.join(app.isPackaged ? process.resourcesPath : __dirname, 'patcher')
+
+function getPatcherVersionFile() {
+  return path.join(PATCHER_DIR, 'version.txt')
+}
+
+function readLocalPatcherVersion() {
+  try {
+    return fs.readFileSync(getPatcherVersionFile(), 'utf-8').trim()
+  } catch {
+    return null
+  }
+}
+
+function writeLocalPatcherVersion(tag) {
+  try {
+    fs.writeFileSync(getPatcherVersionFile(), tag, 'utf-8')
+  } catch (err) {
+    console.error('Patcher versiyon dosyası yazılamadı:', err)
+  }
+}
+
+async function downloadToFile(url, destPath) {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`İndirme başarısız (HTTP ${res.status}): ${url}`)
+  const buffer = Buffer.from(await res.arrayBuffer())
+  fs.writeFileSync(destPath, buffer)
+}
+
+async function checkAndUpdatePatcher() {
+  try {
+    if (patcherProcess) {
+      console.log('Patcher aktif, güncelleme kontrolü ertelendi.')
+      return
+    }
+    const res = await fetch(`https://api.github.com/repos/${PATCHER_REPO}/releases`)
+    if (!res.ok) throw new Error(`GitHub API hatası (HTTP ${res.status})`)
+    const releases = await res.json()
+    const patcherReleases = releases
+      .filter((r) => typeof r.tag_name === 'string' && r.tag_name.startsWith('patcher-'))
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+
+    if (patcherReleases.length === 0) return
+
+    const latest = patcherReleases[0]
+    const localVersion = readLocalPatcherVersion()
+
+    if (localVersion === latest.tag_name) {
+      console.log('Patcher zaten güncel:', latest.tag_name)
+      return
+    }
+
+    const hostAsset = latest.assets.find((a) => a.name === 'ltk_patcher_host.exe')
+
+    if (!hostAsset) {
+      console.error('Patcher release dosyası eksik:', latest.tag_name)
+      return
+    }
+
+    fs.mkdirSync(PATCHER_DIR, { recursive: true })
+
+    const hostTmp = path.join(PATCHER_DIR, 'ltk_patcher_host.exe.tmp')
+    await downloadToFile(hostAsset.browser_download_url, hostTmp)
+    fs.renameSync(hostTmp, path.join(PATCHER_DIR, 'ltk_patcher_host.exe'))
+
+    writeLocalPatcherVersion(latest.tag_name)
+    console.log('Patcher güncellendi:', latest.tag_name)
+    sendToRenderer('patcher-updated', { version: latest.tag_name })
+  } catch (err) {
+    console.error('Patcher güncelleme kontrolü başarısız:', err)
+  }
+}
+
 function spawnPatcher(overlayDir, settings, skinIds) {
   const child = spawn(settings.patcherPath, [], {
     cwd: path.dirname(settings.patcherPath),
@@ -745,6 +820,7 @@ app.whenReady().then(() => {
       createWindow()
     }
   })
+      setTimeout(checkAndUpdatePatcher, 5000)
 })
 
 // Uygulama kapanırken çalışan patcher sürecini temizle

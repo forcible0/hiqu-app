@@ -65,7 +65,8 @@
     "allowToChangeInstallationDirectory": true,
     "installerIcon": "build/icon.ico",
     "uninstallerIcon": "build/icon.ico",
-    "uninstallDisplayName": "Hiqu"
+    "uninstallDisplayName": "Hiqu",
+    "artifactName": "${productName}-Setup-${version}.${ext}"
   },
   "publish": {
     "provider": "github",
