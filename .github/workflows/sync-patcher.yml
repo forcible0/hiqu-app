@@ -5,6 +5,9 @@ on:
     - cron: '0 * * * *'   # her saat başı kontrol eder
   workflow_dispatch:        # istersen elle de tetikleyebilirsin
 
+  permissions:
+  contents: write
+
 jobs:
   sync:
     runs-on: windows-latest
