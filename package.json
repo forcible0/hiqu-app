@@ -1,6 +1,6 @@
 {
   "name": "hiqu",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Electron + React + TypeScript + Tailwind CSS masaüstü uygulaması",
   "main": "main.js",
   "scripts": {
