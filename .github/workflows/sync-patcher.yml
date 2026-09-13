@@ -1,0 +1,54 @@
+name: Sync LTK Patcher
+
+on:
+  schedule:
+    - cron: '0 * * * *'   # her saat başı kontrol eder
+  workflow_dispatch:        # istersen elle de tetikleyebilirsin
+
+jobs:
+  sync:
+    runs-on: windows-latest
+    steps:
+      - name: En son ltk-manager sürümünü bul
+        id: upstream
+        shell: pwsh
+        run: |
+          $headers = @{ Authorization = "token ${{ secrets.GITHUB_TOKEN }}" }
+          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/LeagueToolkit/ltk-manager/releases/latest" -Headers $headers
+          $tag = $release.tag_name
+          $asset = $release.assets | Where-Object { $_.name -match '-setup\.exe$' } | Select-Object -First 1
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
+          echo "asset_url=$($asset.browser_download_url)" >> $env:GITHUB_OUTPUT
+
+      - name: Zaten senkronize mi kontrol et
+        id: check
+        shell: pwsh
+        run: |
+          $code = try {
+            (Invoke-WebRequest -Uri "https://api.github.com/repos/${{ github.repository }}/releases/tags/patcher-${{ steps.upstream.outputs.tag }}" -Headers @{Authorization="token ${{ secrets.GITHUB_TOKEN }}"} -SkipHttpErrorCheck).StatusCode
+          } catch { 404 }
+          echo "exists=$code" >> $env:GITHUB_OUTPUT
+
+      - name: Installer'ı indir
+        if: steps.check.outputs.exists != '200'
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "${{ steps.upstream.outputs.asset_url }}" -OutFile "installer.exe"
+
+      - name: 7-Zip ile sadece host.exe'yi çıkar
+        if: steps.check.outputs.exists != '200'
+        shell: pwsh
+        run: |
+          7z e installer.exe -o"extracted" -r "ltk_patcher_host.exe"
+
+      - name: Yeni patcher release'i oluştur
+        if: steps.check.outputs.exists != '200'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: patcher-${{ steps.upstream.outputs.tag }}
+          name: "Patcher senkronizasyonu: ${{ steps.upstream.outputs.tag }}"
+          body: "ltk-manager ${{ steps.upstream.outputs.tag }} sürümünden otomatik senkronize edildi (sadece host.exe)."
+          files: |
+            extracted/ltk_patcher_host.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
