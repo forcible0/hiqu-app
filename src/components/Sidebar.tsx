@@ -26,6 +26,7 @@ interface SidebarProps {
   onSaveSettings: (settings: AppSettings) => void
   onCheckUpdate: () => void
   onInstallUpdate: () => void
+  onOpenParty: () => void
 }
 
 export default function Sidebar({
@@ -46,6 +47,7 @@ export default function Sidebar({
   onBrowse,
   onSaveSettings,
   onCheckUpdate,
+  onOpenParty,
   onInstallUpdate
 }: SidebarProps) {
   const [showSettingsModal, setShowSettingsModal] = useState(false)
@@ -257,13 +259,21 @@ const renderChampionRow = (c: (typeof filteredChampions)[number]) => (
                 : 'bg-white/[0.04] text-gray-400 hover:bg-white/[0.08] hover:text-sky-300 disabled:opacity-50'
             }`}
           >
-            {checkingUpdate
-              ? 'Kontrol ediliyor...'
-              : downloaded
-              ? '✓ Hazır'
-              : updateAvailable
-              ? '⬇ Güncelleme mevcut'
-              : '↻ Güncelleme kontrol'}
+            {checkingUpdate ? (
+  <span className="flex items-center gap-1.5">
+    <span className="animate-spin inline-block w-3 h-3 border-2 border-sky-400 border-t-transparent rounded-full"></span>
+    Kontrol ediliyor...
+  </span>
+) : downloaded ? (
+  '✓ Hazır'
+) : updateAvailable ? (
+  <span className="flex items-center gap-1.5">
+    <span className="animate-spin inline-block w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full"></span>
+    Güncelleme indiriliyor...
+  </span>
+) : (
+  '↻ Güncelleme kontrol'
+)}
           </button>
         </div>
 
@@ -275,7 +285,12 @@ const renderChampionRow = (c: (typeof filteredChampions)[number]) => (
             🔄 Güncellemeyi yükle ve yeniden başlat
           </button>
         )}
-
+<button
+  onClick={onOpenParty}
+  className="w-full mb-2 flex items-center justify-center gap-2 text-sm font-medium bg-white/[0.04] hover:bg-sky-500/15 border border-white/[0.08] hover:border-sky-500/30 rounded-lg px-3 py-2.5 transition"
+>
+  🎉 Parti Modu
+</button>
         <button
           onClick={() => setShowSettingsModal(true)}
           className="w-full text-left text-sm text-gray-400 hover:text-sky-300 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-lg px-3 py-2 transition flex items-center justify-between"

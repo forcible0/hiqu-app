@@ -1,6 +1,6 @@
 {
   "name": "hiqu",
-  "version": "1.2.5",
+  "version": "1.2.6",
   "description": "Electron + React + TypeScript + Tailwind CSS masaüstü uygulaması",
   "main": "main.js",
   "scripts": {
@@ -38,40 +38,41 @@
   "dependencies": {
     "7zip-bin": "^5.2.0",
     "electron-updater": "^6.8.9",
+    "firebase": "^12.19.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "build": {
-  "appId": "com.hiqu.app",
-  "productName": "Hiqu",
-  "icon": "build/icon.ico",
-  "directories": {
-    "output": "release",
-    "buildResources": "build"
-  },
-  "files": [
-    "dist/**/*",
-    "main.js",
-    "preload.js",
-    "wad.js",
-    "package.json"
-  ],
-  "win": {
-    "target": "nsis",
-    "icon": "build/icon.ico"
-  },
-  "nsis": {
-    "oneClick": false,
-    "allowToChangeInstallationDirectory": true,
-    "installerIcon": "build/icon.ico",
-    "uninstallerIcon": "build/icon.ico",
-    "uninstallDisplayName": "Hiqu",
-    "artifactName": "${productName}-Setup-${version}.${ext}"
-  },
-  "publish": {
-    "provider": "github",
-    "owner": "forcible0",
-    "repo": "hiqu-app"
-  }
+    "appId": "com.hiqu.app",
+    "productName": "Hiqu",
+    "icon": "build/icon.ico",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "dist/**/*",
+      "main.js",
+      "preload.js",
+      "wad.js",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "uninstallDisplayName": "Hiqu",
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "forcible0",
+      "repo": "hiqu-app"
+    }
   }
 }

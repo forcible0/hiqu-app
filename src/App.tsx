@@ -6,6 +6,8 @@ import SkinCard from './components/SkinCard'
 import SkinModal from './components/SkinModal'
 import QueueBar from './components/QueueBar'
 import Toasts from './components/Toasts'
+import PartyModal from './components/PartyModal'
+import { getSavedRoomCode, createRoom, joinRoom, leaveRoom, listenToMembers, PartyMember } from './party'
 
 const FAVORITES_KEY = 'buck_favorites'
 const QUEUE_KEY = 'buck_queue'
@@ -404,6 +406,9 @@ export default function App() {
   const [modalChromas, setModalChromas] = useState<Chroma[]>([])
 const [loadingChromas, setLoadingChromas] = useState(false)
 const [selectedChromaId, setSelectedChromaId] = useState<string | null>(null)
+const [showPartyModal, setShowPartyModal] = useState(false)
+const [partyRoomCode, setPartyRoomCode] = useState<string | null>(getSavedRoomCode())
+const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
 
   // Ayarlar & güncelleme
   const [settings, setSettings] = useState<AppSettings>({})
@@ -503,6 +508,14 @@ const [selectedChromaId, setSelectedChromaId] = useState<string | null>(null)
         setPatcherRunning(ids.length > 0)
       })
     }
+    useEffect(() => {
+  if (!partyRoomCode) {
+    setPartyMembers([])
+    return
+  }
+  const unsubscribe = listenToMembers(partyRoomCode, setPartyMembers)
+  return () => unsubscribe()
+}, [partyRoomCode])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -599,6 +612,22 @@ const handleRandomChampion = () => {
   selectChampion(randomChamp)
   setTab('champions')
   setShowRandomMenu(false)
+}
+const handleCreateParty = async () => {
+  const code = await createRoom()
+  setPartyRoomCode(code)
+}
+
+const handleJoinParty = async (code: string) => {
+  const ok = await joinRoom(code)
+  if (ok) setPartyRoomCode(code)
+  return ok
+}
+
+const handleLeaveParty = async () => {
+  if (!partyRoomCode) return
+  await leaveRoom(partyRoomCode)
+  setPartyRoomCode(null)
 }
 
 const handleRandomSkin = async () => {
@@ -1087,6 +1116,7 @@ const handleRandomSkin = async () => {
           onSaveSettings={handleSaveSettings}
           onCheckUpdate={handleCheckUpdate}
           onInstallUpdate={() => window.electronAPI?.installUpdate()}
+          onOpenParty={() => setShowPartyModal(true)}
         />
 
         <main className="flex-1 min-w-0 flex flex-col">
@@ -1190,7 +1220,16 @@ const handleRandomSkin = async () => {
     />
   )
 })()}
-
+{showPartyModal && (
+  <PartyModal
+    roomCode={partyRoomCode}
+    members={partyMembers}
+    onClose={() => setShowPartyModal(false)}
+    onCreate={handleCreateParty}
+    onJoin={handleJoinParty}
+    onLeave={handleLeaveParty}
+  />
+)}
       <Toasts toasts={toasts} />
     </div>
   )
