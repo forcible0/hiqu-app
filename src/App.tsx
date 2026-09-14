@@ -494,7 +494,7 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
     }
   }
 
-  // İlk yükleme: şampiyonlar, ayarlar, indirilenler, aktif skinler
+// İlk yükleme: şampiyonlar, ayarlar, indirilenler, aktif skinler
   useEffect(() => {
     fetchChampions()
       .then(setChampions)
@@ -508,16 +508,18 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
         setPatcherRunning(ids.length > 0)
       })
     }
-    useEffect(() => {
-  if (!partyRoomCode) {
-    setPartyMembers([])
-    return
-  }
-  const unsubscribe = listenToMembers(partyRoomCode, setPartyMembers)
-  return () => unsubscribe()
-}, [partyRoomCode])
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Parti üyelerini dinleme
+  useEffect(() => {
+    if (!partyRoomCode) {
+      setPartyMembers([])
+      return
+    }
+    const unsubscribe = listenToMembers(partyRoomCode, setPartyMembers)
+    return () => unsubscribe()
+  }, [partyRoomCode])
 
   useEffect(() => {
   setSelectedChromaId(null)
