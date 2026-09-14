@@ -1,6 +1,6 @@
 {
   "name": "hiqu",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "description": "Electron + React + TypeScript + Tailwind CSS masaüstü uygulaması",
   "main": "main.js",
   "scripts": {
@@ -74,5 +74,11 @@
       "owner": "forcible0",
       "repo": "hiqu-app"
     }
+  },
+  "allowScripts": {
+    "electron@25.9.8": true,
+    "esbuild@0.21.5": true,
+    "protobufjs@7.6.6": true,
+    "@firebase/util@1.15.3": true
   }
 }
