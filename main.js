@@ -26,6 +26,7 @@ try {
   console.error('Eski ayarlar taşınamadı:', e.message)
 }
 const LEAGUE_SKINS_BASE = 'https://raw.githubusercontent.com/forcible0/LoLskins/main/skins'
+const PATCHER_DIR = path.join(app.isPackaged ? process.resourcesPath : __dirname, 'patcher')
 
 function readSettings() {
   try {
@@ -41,6 +42,11 @@ function readSettings() {
         if (fs.existsSync(hostExe)) p = hostExe
       }
       raw.patcherPath = p
+    }
+    // Elle seçilmiş geçerli bir yol yoksa, otomatik güncellenen gömülü patcher'ı kullan
+    if (!raw.patcherPath || !fs.existsSync(raw.patcherPath)) {
+      const bundledHost = path.join(PATCHER_DIR, 'ltk_patcher_host.exe')
+      if (fs.existsSync(bundledHost)) raw.patcherPath = bundledHost
     }
     // DLL Path boşsa patcher'ın yanındaki ltk_patcher_dll.dll'i varsayılan olarak öner
     if (!raw.dllPath && raw.patcherPath) {
@@ -442,7 +448,6 @@ function rebuildOverlay(skinIds, gameDir) {
 // prefix sonuna ayraç eklenir (ltk-manager böyle gönderir; DLL doğrudan üstüne ekleme yapar).
 // ==================== PATCHER OTO-GÜNCELLEME ====================
 const PATCHER_REPO = 'forcible0/hiqu-app'
-const PATCHER_DIR = path.join(app.isPackaged ? process.resourcesPath : __dirname, 'patcher')
 
 function getPatcherVersionFile() {
   return path.join(PATCHER_DIR, 'version.txt')
