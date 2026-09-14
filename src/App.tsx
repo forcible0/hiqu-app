@@ -7,7 +7,8 @@ import SkinModal from './components/SkinModal'
 import QueueBar from './components/QueueBar'
 import Toasts from './components/Toasts'
 import PartyModal from './components/PartyModal'
-import { getSavedRoomCode, createRoom, joinRoom, leaveRoom, listenToMembers, PartyMember } from './party'
+import { getDeviceId, getSavedRoomCode, createRoom, joinRoom, leaveRoom, listenToMembers, listenToRoomSkins, broadcastActiveSkin, PartyMember, PartySkinEntry } from './party'
+
 
 const FAVORITES_KEY = 'buck_favorites'
 const QUEUE_KEY = 'buck_queue'
@@ -520,6 +521,33 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
     const unsubscribe = listenToMembers(partyRoomCode, setPartyMembers)
     return () => unsubscribe()
   }, [partyRoomCode])
+  // Partiden gelen skin aktivasyonlarını dinleyip otomatik uygula
+  useEffect(() => {
+    if (!partyRoomCode) return
+    const myDeviceId = getDeviceId()
+    const unsubscribe = listenToRoomSkins(partyRoomCode, (skins) => {
+      Object.values(skins).forEach(async (entry: PartySkinEntry) => {
+        if (entry.setBy === myDeviceId) return
+        if (activeSet.has(entry.skinId)) return
+        addToast('info', `Parti: "${entry.name}" arkadaşın tarafından aktive edildi, indiriliyor...`)
+        const championKey = champions.find((c) => c.id === entry.championId)?.key || ''
+        const partyMeta: SkinMeta = {
+          id: entry.skinId,
+          name: entry.name,
+          num: 0,
+          championId: entry.championId,
+          championKey,
+          championName: entry.championName
+        }
+        if (!downloadedIds.has(entry.skinId)) {
+          await window.electronAPI?.downloadSkin({ championKey, skinId: entry.skinId, meta: partyMeta })
+          refreshDownloaded()
+        }
+        handleApply(partyMeta)
+      })
+    })
+    return () => unsubscribe()
+  }, [partyRoomCode, activeSet, downloadedIds, champions])
 
   useEffect(() => {
   setSelectedChromaId(null)
@@ -761,7 +789,7 @@ const handleRandomSkin = async () => {
     setApplyingIds((prev) => setAdd(prev, meta.id))
     const res: ApplySkinsResult = await window.electronAPI.applySkins({ skinIds: [meta.id] })
     setApplyingIds((prev) => setRemove(prev, meta.id))
-    if (!res.success) {
+        if (!res.success) {
       addToast('error', res.error || 'Skin aktif edilemedi')
       return
     }
@@ -769,6 +797,14 @@ const handleRandomSkin = async () => {
       addToast('warning', `"${meta.name}" zaten aktifti`)
     }
     res.warnings?.forEach((w) => addToast('warning', w))
+    if (partyRoomCode) {
+      broadcastActiveSkin(partyRoomCode, {
+        skinId: meta.id,
+        name: meta.name,
+        championId: meta.championId,
+        championName: meta.championName
+      })
+    }
   }
 
   const handleDeactivate = async (meta: SkinMeta) => {
