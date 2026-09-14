@@ -521,6 +521,19 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
     const unsubscribe = listenToMembers(partyRoomCode, setPartyMembers)
     return () => unsubscribe()
   }, [partyRoomCode])
+
+  const partyProcessedRef = useRef<Record<string, number>>({})
+  const partyProcessingRef = useRef<Set<string>>(new Set())
+  const activeSetRef = useRef(activeSet)
+  const downloadedIdsRef = useRef(downloadedIds)
+  const championsRef = useRef(champions)
+
+  useEffect(() => {
+    activeSetRef.current = activeSet
+    downloadedIdsRef.current = downloadedIds
+    championsRef.current = champions
+  }, [activeSet, downloadedIds, champions])
+
   // Partiden gelen skin aktivasyonlarını dinleyip otomatik uygula
   useEffect(() => {
     if (!partyRoomCode) return
@@ -528,26 +541,39 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
     const unsubscribe = listenToRoomSkins(partyRoomCode, (skins) => {
       Object.values(skins).forEach(async (entry: PartySkinEntry) => {
         if (entry.setBy === myDeviceId) return
-        if (activeSet.has(entry.skinId)) return
-        addToast('info', `Parti: "${entry.name}" arkadaşın tarafından aktive edildi, indiriliyor...`)
-        const championKey = champions.find((c) => c.id === entry.championId)?.key || ''
-        const partyMeta: SkinMeta = {
-          id: entry.skinId,
-          name: entry.name,
-          num: 0,
-          championId: entry.championId,
-          championKey,
-          championName: entry.championName
+        if (partyProcessedRef.current[entry.championId] === entry.setAt) return
+        if (partyProcessingRef.current.has(entry.skinId)) return
+        if (activeSetRef.current.has(entry.skinId)) {
+          partyProcessedRef.current[entry.championId] = entry.setAt
+          return
         }
-        if (!downloadedIds.has(entry.skinId)) {
-          await window.electronAPI?.downloadSkin({ championKey, skinId: entry.skinId, meta: partyMeta })
-          refreshDownloaded()
+
+        partyProcessedRef.current[entry.championId] = entry.setAt
+        partyProcessingRef.current.add(entry.skinId)
+
+        try {
+          addToast('info', `Parti: "${entry.name}" arkadaşın tarafından aktive edildi, indiriliyor...`)
+          const championKey = championsRef.current.find((c) => c.id === entry.championId)?.key || ''
+          const partyMeta: SkinMeta = {
+            id: entry.skinId,
+            name: entry.name,
+            num: 0,
+            championId: entry.championId,
+            championKey,
+            championName: entry.championName
+          }
+          if (!downloadedIdsRef.current.has(entry.skinId)) {
+            await window.electronAPI?.downloadSkin({ championKey, skinId: entry.skinId, meta: partyMeta })
+            refreshDownloaded()
+          }
+          await handleApply(partyMeta)
+        } finally {
+          partyProcessingRef.current.delete(entry.skinId)
         }
-        handleApply(partyMeta)
       })
     })
     return () => unsubscribe()
-  }, [partyRoomCode, activeSet, downloadedIds, champions])
+  }, [partyRoomCode])
 
   useEffect(() => {
   setSelectedChromaId(null)
@@ -778,6 +804,7 @@ const handleRandomSkin = async () => {
 
   const handleApply = async (meta: SkinMeta) => {
     if (!window.electronAPI) return
+    if (applyingIds.has(meta.id)) return
     if (activeSet.has(meta.id)) {
       addToast('warning', `"${meta.name}" zaten aktif`)
       return
@@ -797,12 +824,13 @@ const handleRandomSkin = async () => {
       addToast('warning', `"${meta.name}" zaten aktifti`)
     }
     res.warnings?.forEach((w) => addToast('warning', w))
-    if (partyRoomCode) {
+       if (partyRoomCode) {
       broadcastActiveSkin(partyRoomCode, {
         skinId: meta.id,
         name: meta.name,
         championId: meta.championId,
-        championName: meta.championName
+        championName: meta.championName,
+        num: meta.num
       })
     }
   }

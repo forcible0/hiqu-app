@@ -13,6 +13,7 @@ export interface PartySkinEntry {
   name: string
   championId: string
   championName: string
+  num: number
   setBy: string
   setAt: number
 }
