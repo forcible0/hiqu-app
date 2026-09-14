@@ -2,8 +2,11 @@ name: Sync LTK Patcher
 
 on:
   schedule:
-    - cron: '0 * * * *'   # her saat başı kontrol eder
-  workflow_dispatch:        # istersen elle de tetikleyebilirsin
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   sync:
@@ -47,7 +50,7 @@ jobs:
         with:
           tag_name: patcher-${{ steps.upstream.outputs.tag }}
           name: "Patcher senkronizasyonu: ${{ steps.upstream.outputs.tag }}"
-          body: "ltk-manager ${{ steps.upstream.outputs.tag }} sürümünden otomatik senkronize edildi (sadece host.exe)."
+          body: "ltk-manager sürümünden otomatik senkronize edildi (sadece host.exe)."
           files: |
             extracted/ltk_patcher_host.exe
         env:
