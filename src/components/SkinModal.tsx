@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { SkinMeta, Chroma } from '../types'
 import { getSkinImageUrl } from '../api'
+import { Heart, Check, Trash2, Plus, Download, Square, RotateCcw, X, Gamepad2, Zap } from 'lucide-react'
 
 interface SkinModalProps {
   meta: SkinMeta
@@ -92,14 +93,16 @@ useEffect(() => {
               }}
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-5xl text-gray-600">🎮</div>
+            <div className="w-full h-full flex items-center justify-center text-gray-600">
+              <Gamepad2 className="w-12 h-12" strokeWidth={1.5} />
+            </div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-[#18181b] via-transparent to-transparent"></div>
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 w-9 h-9 flex items-center justify-center rounded-full bg-black/60 backdrop-blur text-gray-300 hover:text-white hover:bg-black/80 transition text-xl leading-none"
+            className="absolute top-3 right-3 w-9 h-9 flex items-center justify-center rounded-full bg-black/60 backdrop-blur text-gray-300 hover:text-white hover:bg-black/80 transition"
           >
-            ×
+            <X className="w-4 h-4" strokeWidth={2} />
           </button>
           <button
             onClick={onToggleFavorite}
@@ -110,7 +113,7 @@ useEffect(() => {
                 : 'bg-black/60 text-gray-300 hover:bg-sky-500/70 hover:text-white'
             }`}
           >
-            {isFavorite ? '♥' : '♡'}
+            <Heart className="w-4 h-4" fill={isFavorite ? 'currentColor' : 'none'} strokeWidth={2} />
           </button>
           <div className="absolute bottom-3 left-5 right-5 flex items-end justify-between gap-3">
             <div className="min-w-0">
@@ -128,8 +131,8 @@ useEffect(() => {
                 </span>
               )}
               {!isActive && isDownloaded && (
-                <span className="bg-sky-600/90 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg shadow-sky-500/30">
-                  ✓ İNDİRİLDİ
+                <span className="flex items-center gap-1 bg-sky-600/90 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg shadow-sky-500/30">
+                  <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> İNDİRİLDİ
                 </span>
               )}
             </div>
@@ -179,9 +182,13 @@ useEffect(() => {
                       Aktif Ediliyor...
                     </>
                   ) : isActive ? (
-                    <>✓ Zaten Aktif</>
+                    <>
+                      <Check className="w-4 h-4" strokeWidth={2.5} /> Zaten Aktif
+                    </>
                   ) : (
-                    <>✓ Aktif Et</>
+                    <>
+                      <Check className="w-4 h-4" strokeWidth={2.5} /> Aktif Et
+                    </>
                   )}
                 </button>
                 {isActive ? (
@@ -190,7 +197,7 @@ useEffect(() => {
                     disabled={isApplying}
                     className="px-5 py-3 rounded-xl font-semibold bg-amber-500/10 border border-amber-500/40 text-amber-300 hover:bg-amber-500/20 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    ⏹ Pasifleştir
+                    <Square className="w-3.5 h-3.5" fill="currentColor" strokeWidth={0} /> Pasifleştir
                   </button>
                 ) : (
                   <button
@@ -201,7 +208,15 @@ useEffect(() => {
                         : 'bg-white/[0.06] border border-white/[0.1] hover:bg-blue-500/20 hover:border-blue-500/40 hover:text-blue-200'
                     }`}
                   >
-                    {inQueue ? '✓ Sırada' : '＋ Sıraya Ekle'}
+                    {inQueue ? (
+                      <>
+                        <Check className="w-4 h-4" strokeWidth={2.5} /> Sırada
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="w-4 h-4" strokeWidth={2.5} /> Sıraya Ekle
+                      </>
+                    )}
                   </button>
                 )}
                 <button
@@ -215,7 +230,9 @@ useEffect(() => {
                       Kaldırılıyor...
                     </>
                   ) : (
-                    <>🗑️ Kaldır</>
+                    <>
+                      <Trash2 className="w-4 h-4" strokeWidth={2} /> Kaldır
+                    </>
                   )}
                 </button>
               </div>
@@ -227,7 +244,7 @@ useEffect(() => {
                 onClick={onDownload}
                 className="w-full bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-500 hover:to-blue-500 px-4 py-3 rounded-xl font-semibold transition shadow-lg shadow-sky-500/25 flex items-center justify-center gap-2"
               >
-                ⬇️ İndir
+                <Download className="w-4 h-4" strokeWidth={2} /> İndir
               </button>
               <button
                 onClick={onToggleQueue}
@@ -237,14 +254,24 @@ useEffect(() => {
                     : 'bg-white/[0.05] border border-white/[0.1] text-gray-300 hover:bg-blue-500/15 hover:border-blue-500/40 hover:text-blue-200'
                 }`}
               >
-                {inQueue ? '✓ Sırada — çıkarmak için tıklayın' : '＋ Sıraya Ekle (sonra topluca patchleyin)'}
+                {inQueue ? (
+                  <>
+                    <Check className="w-4 h-4" strokeWidth={2.5} /> Sırada — çıkarmak için tıklayın
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4" strokeWidth={2.5} /> Sıraya Ekle (sonra topluca patchleyin)
+                  </>
+                )}
               </button>
             </div>
           )}
-          <p className="text-gray-600 text-xs mt-3 text-center">
+          <p className="text-gray-600 text-xs mt-3 text-center inline-flex items-center gap-1 justify-center flex-wrap">
             Skin, LoLskins deposundan indirilir. Alt bardaki{' '}
-            <span className="text-sky-400 font-semibold">⚡ Patchle</span> butonu ile sıradaki tüm
-            skinleri tek seferde aktif edebilirsiniz.
+            <span className="text-sky-400 font-semibold inline-flex items-center gap-1">
+              <Zap className="w-3 h-3" strokeWidth={2.5} /> Patchle
+            </span>{' '}
+            butonu ile sıradaki tüm skinleri tek seferde aktif edebilirsiniz.
           </p>
                 </div>
       </div>
@@ -264,8 +291,8 @@ useEffect(() => {
         : 'border-white/[0.1] bg-white/[0.02] hover:bg-white/[0.05]'
     }`}
   >
-    <div className="aspect-[3/4] w-full rounded-lg bg-white/[0.06] flex items-center justify-center text-gray-400 text-2xl">
-      ⟲
+    <div className="aspect-[3/4] w-full rounded-lg bg-white/[0.06] flex items-center justify-center text-gray-400">
+      <RotateCcw className="w-6 h-6" strokeWidth={1.75} />
     </div>
     <p className="text-xs font-semibold text-gray-300">Orijinal</p>
   </button>

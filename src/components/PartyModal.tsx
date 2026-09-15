@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { PartyMember } from '../party'
+import { PartyPopper, Copy, Check, X } from 'lucide-react'
 
 interface PartyModalProps {
   roomCode: string | null
@@ -52,9 +53,12 @@ export default function PartyModal({ roomCode, members, onClose, onCreate, onJoi
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-bold">🎉 Parti Modu</h2>
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            <PartyPopper className="w-5 h-5 text-sky-400" strokeWidth={2} />
+            Parti Modu
+          </h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/[0.08] text-gray-400 hover:text-white transition">
-            ×
+            <X className="w-4 h-4" strokeWidth={2} />
           </button>
         </div>
 
@@ -105,9 +109,9 @@ export default function PartyModal({ roomCode, members, onClose, onCreate, onJoi
                 <span className="text-3xl font-bold tracking-[0.3em] font-mono">{roomCode}</span>
                 <button
                   onClick={handleCopy}
-                  className="text-xs px-2 py-1 rounded-md bg-white/[0.06] hover:bg-white/[0.12] transition"
+                  className="inline-flex items-center justify-center text-xs px-2 py-1.5 rounded-md bg-white/[0.06] hover:bg-white/[0.12] transition"
                 >
-                  {copied ? '✓' : '📋'}
+                  {copied ? <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> : <Copy className="w-3.5 h-3.5" strokeWidth={2} />}
                 </button>
               </div>
             </div>

@@ -1,5 +1,6 @@
 import { SkinMeta } from '../types'
 import { getSkinImageUrl } from '../api'
+import { ListOrdered, Pause, Zap, X, Plus } from 'lucide-react'
 
 interface QueueBarProps {
   queue: SkinMeta[]
@@ -28,7 +29,7 @@ export default function QueueBar({
       <div className="flex items-center gap-4 px-4 py-3">
         {/* Sıra başlığı */}
         <div className="flex items-center gap-2 shrink-0 w-24">
-          <span className="text-sky-400 text-lg">🧺</span>
+          <ListOrdered className="w-5 h-5 text-sky-400" strokeWidth={2} />
           <div>
             <p className="text-xs font-bold tracking-wide text-sky-300">SKİN SIRASI</p>
             <p className="text-[10px] text-gray-500">{queue.length} skin</p>
@@ -38,9 +39,11 @@ export default function QueueBar({
         {/* Sıradaki skin kartları (yatay kaydırılabilir) */}
         <div className="flex-1 min-w-0 overflow-x-auto">
           {queue.length === 0 ? (
-            <p className="text-gray-600 text-xs italic px-2">
+            <p className="text-gray-600 text-xs italic px-2 flex items-center gap-1">
               Skini modalden veya kart üzerindeki{' '}
-              <span className="text-blue-400 not-italic border border-blue-500/40 rounded px-1">＋</span>{' '}
+              <span className="inline-flex items-center justify-center text-blue-400 not-italic border border-blue-500/40 rounded px-1">
+                <Plus className="w-3 h-3" strokeWidth={2.5} />
+              </span>{' '}
               butonu ile sıraya ekleyin; tek tıkla toplu patchleyin.
             </p>
           ) : (
@@ -74,9 +77,9 @@ export default function QueueBar({
                       onClick={() => onRemoveItem(meta.id)}
                       disabled={isPatching}
                       title="Sıradan çıkar"
-                      className="absolute top-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full bg-black/70 text-gray-300 hover:bg-red-500/80 hover:text-white text-[10px] leading-none transition disabled:opacity-40"
+                      className="absolute top-0.5 right-0.5 w-4 h-4 flex items-center justify-center rounded-full bg-black/70 text-gray-300 hover:bg-red-500/80 hover:text-white transition disabled:opacity-40"
                     >
-                      ×
+                      <X className="w-2.5 h-2.5" strokeWidth={2.5} />
                     </button>
                   </div>
                 )
@@ -100,9 +103,9 @@ export default function QueueBar({
             <button
               onClick={onStopPatches}
               disabled={isPatching}
-              className="text-xs text-gray-400 hover:text-amber-300 border border-white/[0.1] hover:border-amber-500/40 rounded-lg px-3 py-2.5 transition disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-amber-300 border border-white/[0.1] hover:border-amber-500/40 rounded-lg px-3 py-2.5 transition disabled:opacity-40"
             >
-              ⏸ Durdur
+              <Pause className="w-3.5 h-3.5" strokeWidth={2} /> Durdur
             </button>
           )}
           <button
@@ -116,7 +119,9 @@ export default function QueueBar({
                 {patchProgress || 'Patchleniyor...'}
               </>
             ) : (
-              <>⚡ Patchle ({queue.length})</>
+              <>
+                <Zap className="w-4 h-4" strokeWidth={2} /> Patchle ({queue.length})
+              </>
             )}
           </button>
         </div>

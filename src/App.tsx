@@ -8,6 +8,7 @@ import QueueBar from './components/QueueBar'
 import Toasts from './components/Toasts'
 import PartyModal from './components/PartyModal'
 import { getDeviceId, getSavedRoomCode, createRoom, joinRoom, leaveRoom, listenToMembers, listenToRoomSkins, broadcastActiveSkin, PartyMember, PartySkinEntry } from './party'
+import { Check, Square, Trash2, ArrowLeft, Palette, Heart, Package, Dices, Wand2, Search, type LucideIcon } from 'lucide-react'
 
 
 const FAVORITES_KEY = 'buck_favorites'
@@ -527,6 +528,7 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
   const activeSetRef = useRef(activeSet)
   const downloadedIdsRef = useRef(downloadedIds)
   const championsRef = useRef(champions)
+  const handleApplyRef = useRef<((meta: SkinMeta) => Promise<void>) | null>(null)
 
   useEffect(() => {
     activeSetRef.current = activeSet
@@ -555,18 +557,18 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
           addToast('info', `Parti: "${entry.name}" arkadaşın tarafından aktive edildi, indiriliyor...`)
           const championKey = championsRef.current.find((c) => c.id === entry.championId)?.key || ''
           const partyMeta: SkinMeta = {
-            id: entry.skinId,
-            name: entry.name,
-            num: 0,
-            championId: entry.championId,
-            championKey,
-            championName: entry.championName
-          }
+  id: entry.skinId,
+  name: entry.name,
+  num: entry.num,                  // ✅ gelen değeri kullan
+  championId: entry.championId,
+  championKey,
+  championName: entry.championName
+}
           if (!downloadedIdsRef.current.has(entry.skinId)) {
             await window.electronAPI?.downloadSkin({ championKey, skinId: entry.skinId, meta: partyMeta })
             refreshDownloaded()
           }
-          await handleApply(partyMeta)
+          await handleApplyRef.current?.(partyMeta)
         } finally {
           partyProcessingRef.current.delete(entry.skinId)
         }
@@ -719,7 +721,7 @@ const handleRandomSkin = async () => {
       setFavorites((prev) => prev.filter((f) => f.id !== meta.id))
     } else {
       setFavorites((prev) => [meta, ...prev])
-      addToast('success', `"${meta.name}" favorilere eklendi ♥`)
+      addToast('success', `"${meta.name}" favorilere eklendi`)
     }
   }
 
@@ -834,6 +836,9 @@ const handleRandomSkin = async () => {
       })
     }
   }
+  useEffect(() => {
+  handleApplyRef.current = handleApply
+})
 
   const handleDeactivate = async (meta: SkinMeta) => {
     if (!window.electronAPI) return
@@ -992,14 +997,14 @@ const handleRandomSkin = async () => {
 
   const skinGrid = (
     metas: SkinMeta[],
-    emptyIcon: string,
+    EmptyIcon: LucideIcon,
     emptyTitle: string,
     emptyHint: string,
     showManagement: boolean = false
   ) =>
     metas.length === 0 ? (
       <div className="h-full flex flex-col items-center justify-center text-center py-20">
-        <span className="text-5xl mb-4 opacity-60">{emptyIcon}</span>
+        <EmptyIcon className="w-10 h-10 mb-4 text-gray-500" strokeWidth={1.5} />
         <p className="text-gray-300 font-semibold">{emptyTitle}</p>
         <p className="text-gray-600 text-sm mt-1 max-w-xs">{emptyHint}</p>
       </div>
@@ -1009,27 +1014,35 @@ const handleRandomSkin = async () => {
           <div className="flex items-center gap-2 mb-4">
             <button
               onClick={() => setSelectionMode(!selectionMode)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+              className={`inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition ${
                 selectionMode
                   ? 'bg-sky-500/20 border border-sky-500/40 text-sky-300'
                   : 'bg-white/[0.04] text-gray-400 hover:bg-white/[0.08]'
               }`}
             >
-              {selectionMode ? '✓ Seçim Kapat' : '☐ Seç'}
+              {selectionMode ? (
+                <>
+                  <Check className="w-4 h-4" strokeWidth={2.5} /> Seçim Kapat
+                </>
+              ) : (
+                <>
+                  <Square className="w-4 h-4" strokeWidth={2} /> Seç
+                </>
+              )}
             </button>
             {selectionMode && selectedIds.size > 0 && (
               <button
                 onClick={handleDeleteSelected}
-                className="px-4 py-2 rounded-lg text-sm font-medium bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition"
               >
-                🗑 Seçilenleri Sil ({selectedIds.size})
+                <Trash2 className="w-4 h-4" strokeWidth={2} /> Seçilenleri Sil ({selectedIds.size})
               </button>
             )}
             <button
               onClick={handleDeleteAllDownloaded}
-              className="ml-auto px-4 py-2 rounded-lg text-sm font-medium bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition"
+              className="ml-auto inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition"
             >
-              🗑 Hepsini Sil
+              <Trash2 className="w-4 h-4" strokeWidth={2} /> Hepsini Sil
             </button>
           </div>
         )}
@@ -1062,8 +1075,8 @@ const handleRandomSkin = async () => {
         ? selectedChampion.name
         : 'Şampiyonlar'
       : tab === 'favorites'
-      ? '♥ Favoriler'
-      : '⬇ İndirilenler'
+      ? 'Favoriler'
+      : 'İndirilenler'
 
   let content: JSX.Element
   if (tab === 'champions') {
@@ -1075,7 +1088,7 @@ const handleRandomSkin = async () => {
             onClick={() => setSelectedChampion(null)}
             className="mb-4 text-sm text-sky-400 hover:text-sky-300 flex items-center gap-1 transition"
           >
-            ← Tüm şampiyonlar
+            <ArrowLeft className="w-4 h-4" strokeWidth={2} /> Tüm şampiyonlar
           </button>
           {loadingSkins ? (
             <div className="flex items-center justify-center py-20 text-gray-500 gap-3">
@@ -1083,7 +1096,7 @@ const handleRandomSkin = async () => {
               Skinler yükleniyor...
             </div>
           ) : (
-            skinGrid(metas, '🎨', 'Skin bulunamadı', 'Aramanızla eşleşen skin yok.')
+            skinGrid(metas, Palette, 'Skin bulunamadı', 'Aramanızla eşleşen skin yok.')
           )}
         </div>
       )
@@ -1144,14 +1157,14 @@ const handleRandomSkin = async () => {
   } else if (tab === 'favorites') {
     content = skinGrid(
       favorites.filter(metaMatches),
-      '💙',
+      Heart,
       'Henüz favori yok',
-      'Skin kartlarındaki ♥ butonu ile favorilerinize ekleyin.'
+      'Skin kartlarındaki kalp butonu ile favorilerinize ekleyin.'
     )
   } else {
     content = skinGrid(
       downloadedMetas.filter(metaMatches),
-      '📦',
+      Package,
       'İndirilmiş skin yok',
       'İndirdiğiniz skinler burada görünecek. İndirme, skini otomatik aktif ETMEZ.',
       true
@@ -1193,7 +1206,7 @@ const handleRandomSkin = async () => {
     onClick={() => setShowRandomMenu((v) => !v)}
     className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-gray-300 hover:bg-sky-500/15 hover:border-sky-500/30 hover:text-sky-300 transition"
   >
-    🎲 Rastgele
+    <Dices className="w-3.5 h-3.5" strokeWidth={2} /> Rastgele
   </button>
   {showRandomMenu && (
     <>
@@ -1201,15 +1214,15 @@ const handleRandomSkin = async () => {
       <div className="absolute top-full left-0 mt-2 z-50 w-44 bg-[#1c1c1f] border border-white/[0.08] rounded-xl shadow-2xl shadow-black/50 overflow-hidden">
         <button
           onClick={handleRandomChampion}
-          className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition"
+          className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition flex items-center gap-2"
         >
-          🧙 Rastgele Karakter
+          <Wand2 className="w-4 h-4" strokeWidth={2} /> Rastgele Karakter
         </button>
         <button
           onClick={handleRandomSkin}
-          className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition border-t border-white/[0.06]"
+          className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition border-t border-white/[0.06] flex items-center gap-2"
         >
-          🎨 Rastgele Skin
+          <Palette className="w-4 h-4" strokeWidth={2} /> Rastgele Skin
         </button>
       </div>
     </>
@@ -1224,13 +1237,14 @@ const handleRandomSkin = async () => {
                 {championSkins.length} skin
               </span>
             )}
-            <div className="ml-auto w-64">
+            <div className="ml-auto w-64 relative">
+              <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2} />
               <input
                 type="text"
-                placeholder={tab === 'champions' && !selectedChampion ? '🔍 Şampiyon ara...' : '🔍 Skin ara...'}
+                placeholder={tab === 'champions' && !selectedChampion ? 'Şampiyon ara...' : 'Skin ara...'}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full bg-black/30 border border-white/[0.08] rounded-lg px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/25 transition"
+                className="w-full bg-black/30 border border-white/[0.08] rounded-lg pl-9 pr-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/25 transition"
               />
             </div>
           </header>

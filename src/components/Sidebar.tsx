@@ -1,10 +1,26 @@
 import { useEffect, useRef, useState } from 'react'
 import { SkinItem, AppSettings, TabKey } from '../types'
+import {
+  Swords,
+  Heart,
+  Download,
+  Search,
+  Check,
+  RotateCw,
+  RefreshCw,
+  PartyPopper,
+  Settings,
+  X,
+  Moon,
+  Sun,
+  Save,
+  type LucideIcon
+} from 'lucide-react'
 
-const NAV_ITEMS: { key: TabKey; label: string; icon: string }[] = [
-  { key: 'champions', label: 'Şampiyonlar', icon: '🎯' },
-  { key: 'favorites', label: 'Favoriler', icon: '♥' },
-  { key: 'downloaded', label: 'İndirilenler', icon: '⬇' }
+const NAV_ITEMS: { key: TabKey; label: string; icon: LucideIcon }[] = [
+  { key: 'champions', label: 'Şampiyonlar', icon: Swords },
+  { key: 'favorites', label: 'Favoriler', icon: Heart },
+  { key: 'downloaded', label: 'İndirilenler', icon: Download }
 ]
 
 interface SidebarProps {
@@ -154,6 +170,7 @@ const renderChampionRow = (c: (typeof filteredChampions)[number]) => (
         {NAV_ITEMS.map((item) => {
           const active = tab === item.key
           const badge = badgeFor(item.key)
+          const Icon = item.icon
           return (
             <button
               key={item.key}
@@ -164,7 +181,11 @@ const renderChampionRow = (c: (typeof filteredChampions)[number]) => (
                   : 'text-gray-400 border-transparent hover:bg-white/[0.04] hover:text-gray-200'
               }`}
             >
-              <span className={`text-base ${item.key === 'favorites' ? 'text-sky-400' : ''}`}>{item.icon}</span>
+              <Icon
+                className={`w-4 h-4 shrink-0 ${item.key === 'favorites' ? 'text-sky-400' : ''}`}
+                strokeWidth={2}
+                fill={item.key === 'favorites' && active ? 'currentColor' : 'none'}
+              />
               {item.label}
               {badge !== null && badge > 0 && (
   <span className="ml-auto text-[11px] font-semibold bg-white/[0.06] text-gray-300 rounded-full px-2 py-0.5 min-w-[22px] text-center group-hover:bg-sky-500/20 group-hover:text-sky-300 transition">
@@ -180,13 +201,16 @@ const renderChampionRow = (c: (typeof filteredChampions)[number]) => (
 
       {/* Şampiyon listesi (sadece Şampiyonlar sekmesinde) */}
           <div className="px-4 pt-2 pb-1">
-            <input
-              type="text"
-              placeholder="🔍 Şampiyon ara..."
-              value={champFilter}
-              onChange={(e) => setChampFilter(e.target.value)}
-              className="w-full bg-black/30 border border-white/[0.07] rounded-lg px-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/20 transition"
-            />
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2} />
+              <input
+                type="text"
+                placeholder="Şampiyon ara..."
+                value={champFilter}
+                onChange={(e) => setChampFilter(e.target.value)}
+                className="w-full bg-black/30 border border-white/[0.07] rounded-lg pl-8 pr-3 py-1.5 text-xs text-gray-200 focus:outline-none focus:border-sky-500/50 focus:ring-1 focus:ring-sky-500/20 transition"
+              />
+            </div>
           </div>
          <div className="flex-1 overflow-hidden flex">
   {!champFilter && availableLetters.length > 0 && (
@@ -251,7 +275,7 @@ const renderChampionRow = (c: (typeof filteredChampions)[number]) => (
           <button
             onClick={onCheckUpdate}
             disabled={checkingUpdate || downloaded}
-            className={`text-xs font-medium px-3 py-1.5 rounded-lg transition ${
+            className={`inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg transition ${
               updateAvailable
                 ? 'bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500/30'
                 : downloaded
@@ -265,14 +289,18 @@ const renderChampionRow = (c: (typeof filteredChampions)[number]) => (
     Kontrol ediliyor...
   </span>
 ) : downloaded ? (
-  '✓ Hazır'
+  <>
+    <Check className="w-3.5 h-3.5" strokeWidth={2.5} /> Hazır
+  </>
 ) : updateAvailable ? (
   <span className="flex items-center gap-1.5">
     <span className="animate-spin inline-block w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full"></span>
     Güncelleme indiriliyor...
   </span>
 ) : (
-  '↻ Güncelleme kontrol'
+  <>
+    <RotateCw className="w-3.5 h-3.5" strokeWidth={2} /> Güncelleme kontrol
+  </>
 )}
           </button>
         </div>
@@ -280,22 +308,24 @@ const renderChampionRow = (c: (typeof filteredChampions)[number]) => (
         {downloaded && (
           <button
             onClick={onInstallUpdate}
-            className="w-full mb-2 text-sm font-semibold bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-lg px-3 py-2 transition shadow-lg shadow-green-500/20"
+            className="w-full mb-2 flex items-center justify-center gap-2 text-sm font-semibold bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 rounded-lg px-3 py-2 transition shadow-lg shadow-green-500/20"
           >
-            🔄 Güncellemeyi yükle ve yeniden başlat
+            <RefreshCw className="w-4 h-4" strokeWidth={2} /> Güncellemeyi yükle ve yeniden başlat
           </button>
         )}
 <button
   onClick={onOpenParty}
   className="w-full mb-2 flex items-center justify-center gap-2 text-sm font-medium bg-white/[0.04] hover:bg-sky-500/15 border border-white/[0.08] hover:border-sky-500/30 rounded-lg px-3 py-2.5 transition"
 >
-  🎉 Parti Modu
+  <PartyPopper className="w-4 h-4" strokeWidth={2} /> Parti Modu
 </button>
         <button
           onClick={() => setShowSettingsModal(true)}
           className="w-full text-left text-sm text-gray-400 hover:text-sky-300 bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.06] rounded-lg px-3 py-2 transition flex items-center justify-between"
         >
-          <span>⚙️ Ayarlar</span>
+          <span className="flex items-center gap-2">
+            <Settings className="w-4 h-4" strokeWidth={2} /> Ayarlar
+          </span>
         </button>
       </div>
     </aside>
@@ -312,12 +342,14 @@ const renderChampionRow = (c: (typeof filteredChampions)[number]) => (
         >
           {/* Modal Header */}
           <div className="flex items-center justify-between p-4 border-b border-white/[0.06]">
-            <h2 className="text-lg font-semibold text-white">⚙️ Ayarlar</h2>
+            <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+              <Settings className="w-5 h-5" strokeWidth={2} /> Ayarlar
+            </h2>
             <button
               onClick={() => setShowSettingsModal(false)}
               className="text-gray-400 hover:text-white transition p-1"
             >
-              ✕
+              <X className="w-4 h-4" strokeWidth={2} />
             </button>
           </div>
 
@@ -381,23 +413,23 @@ const renderChampionRow = (c: (typeof filteredChampions)[number]) => (
                   <div className="flex gap-2">
                     <button
                       onClick={() => setThemeMode('dark')}
-                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${
+                      className={`flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition ${
                         themeMode === 'dark'
                           ? 'bg-sky-500/20 border border-sky-500/40 text-sky-300'
                           : 'bg-white/[0.04] text-gray-400 hover:bg-white/[0.08]'
                       }`}
                     >
-                      🌙 Karanlık
+                      <Moon className="w-3.5 h-3.5" strokeWidth={2} /> Karanlık
                     </button>
                     <button
                       onClick={() => setThemeMode('light')}
-                      className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition ${
+                      className={`flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition ${
                         themeMode === 'light'
                           ? 'bg-sky-500/20 border border-sky-500/40 text-sky-300'
                           : 'bg-white/[0.04] text-gray-400 hover:bg-white/[0.08]'
                       }`}
                     >
-                      ☀️ Aydınlık
+                      <Sun className="w-3.5 h-3.5" strokeWidth={2} /> Aydınlık
                     </button>
                   </div>
                 </div>
@@ -442,9 +474,9 @@ const renderChampionRow = (c: (typeof filteredChampions)[number]) => (
                 onSaveSettings(settings)
                 setShowSettingsModal(false)
               }}
-              className="px-4 py-2 text-sm font-semibold bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 rounded-lg transition shadow-lg shadow-sky-500/20"
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-sm font-semibold bg-gradient-to-r from-blue-600 to-sky-500 hover:from-blue-500 hover:to-sky-400 rounded-lg transition shadow-lg shadow-sky-500/20"
             >
-              💾 Kaydet
+              <Save className="w-3.5 h-3.5" strokeWidth={2} /> Kaydet
             </button>
           </div>
         </div>

@@ -1,5 +1,6 @@
 import { SkinMeta } from '../types'
 import { getSkinImageUrl } from '../api'
+import { Download, Heart, Check, Gamepad2, Plus } from 'lucide-react'
 
 interface SkinCardProps {
   meta: SkinMeta
@@ -56,7 +57,9 @@ export default function SkinCard({
             }}
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-3xl text-gray-600">🎮</div>
+          <div className="w-full h-full flex items-center justify-center text-gray-600">
+            <Gamepad2 className="w-8 h-8" strokeWidth={1.5} />
+          </div>
         )}
         <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent pt-10 pb-2 px-3 pointer-events-none rounded-b-2xl">
   <p className="text-sm font-semibold text-white truncate">{meta.name}</p>
@@ -72,13 +75,13 @@ export default function SkinCard({
             onToggleFavorite()
           }}
           title={isFavorite ? 'Favorilerden çıkar' : 'Favorilere ekle'}
-          className={`absolute top-2 left-2 w-8 h-8 rounded-full flex items-center justify-center text-sm backdrop-blur transition ${
+          className={`absolute top-2 left-2 w-8 h-8 rounded-full flex items-center justify-center backdrop-blur transition ${
             isFavorite
               ? 'bg-sky-500/90 text-white shadow-lg shadow-sky-500/40'
               : 'bg-black/50 text-gray-300 opacity-0 group-hover:opacity-100 hover:bg-sky-500/70'
           }`}
         >
-          {isFavorite ? '♥' : '♡'}
+          <Heart className="w-4 h-4" fill={isFavorite ? 'currentColor' : 'none'} strokeWidth={2} />
         </button>
 
         {/* Seçim modu için checkbox */}
@@ -91,7 +94,7 @@ export default function SkinCard({
                   : 'bg-black/50 border-gray-400'
               }`}
             >
-              {isSelected && <span className="text-sm">✓</span>}
+              {isSelected && <Check className="w-4 h-4" strokeWidth={2.5} />}
             </div>
           </div>
         )}
@@ -110,8 +113,8 @@ export default function SkinCard({
             </span>
           )}
           {!isDownloading && !isActive && isDownloaded && (
-            <span className="bg-sky-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg shadow-sky-500/30">
-              ✓ İNDİRİLDİ
+            <span className="flex items-center gap-1 bg-sky-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg shadow-sky-500/30">
+              <Check className="w-3 h-3" strokeWidth={2.5} /> İNDİRİLDİ
             </span>
           )}
         </div>
@@ -125,9 +128,9 @@ export default function SkinCard({
                 onDownload()
               }}
               title="İndir"
-              className="w-9 h-9 rounded-full bg-black/60 text-gray-200 text-sm flex items-center justify-center shadow-lg shadow-black/40 hover:bg-sky-600/90 hover:text-white hover:shadow-sky-500/30 transition"
+              className="w-9 h-9 rounded-full bg-black/60 text-gray-200 flex items-center justify-center shadow-lg shadow-black/40 hover:bg-sky-600/90 hover:text-white hover:shadow-sky-500/30 transition"
             >
-              ⬇
+              <Download className="w-4 h-4" strokeWidth={2} />
             </button>
           )}
           {!isActive && (
@@ -137,13 +140,13 @@ export default function SkinCard({
                 onToggleQueue()
               }}
               title={inQueue ? 'Sıradan çıkar' : 'Sıraya ekle'}
-              className={`w-9 h-9 rounded-full text-sm flex items-center justify-center shadow-lg transition ${
+              className={`w-9 h-9 rounded-full flex items-center justify-center shadow-lg transition ${
                 inQueue
                   ? 'bg-blue-500 text-white shadow-blue-500/40'
                   : 'bg-black/60 text-gray-200 hover:bg-blue-600/80 hover:text-white shadow-black/40'
               }`}
             >
-              {inQueue ? '✓' : '＋'}
+              {inQueue ? <Check className="w-4 h-4" strokeWidth={2.5} /> : <Plus className="w-4 h-4" strokeWidth={2.5} />}
             </button>
           )}
         </div>
