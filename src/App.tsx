@@ -566,6 +566,7 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
 }
           if (!downloadedIdsRef.current.has(entry.skinId)) {
             await window.electronAPI?.downloadSkin({ championKey, skinId: entry.skinId, meta: partyMeta })
+            downloadedIdsRef.current = new Set(downloadedIdsRef.current).add(entry.skinId)
             refreshDownloaded()
           }
           await handleApplyRef.current?.(partyMeta)
@@ -811,7 +812,7 @@ const handleRandomSkin = async () => {
       addToast('warning', `"${meta.name}" zaten aktif`)
       return
     }
-    if (!downloadedIds.has(meta.id)) {
+    if (!downloadedIdsRef.current.has(meta.id)) {
       addToast('error', 'Önce skini indirmeniz gerekiyor')
       return
     }
