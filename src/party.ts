@@ -1,5 +1,5 @@
 import { db } from './firebase'
-import { ref, set, get, onValue, off, remove, update } from 'firebase/database'
+import { ref, set, get, onValue, remove, update } from 'firebase/database'
 
 export interface PartyMember {
   id: string
@@ -84,21 +84,25 @@ export async function leaveRoom(code: string) {
   localStorage.removeItem(ROOM_CODE_KEY)
 }
 
+// onValue() zaten kendi unsubscribe fonksiyonunu döndürür — off() ile
+// karıştırmaya gerek yok (yanlış callback referansı verirsen dinleyici
+// gerçekte kapanmaz, tam olarak yaşadığın "partiden ayrılınca da
+// güncellemeler gelmeye devam ediyor" bugu buydu).
 export function listenToMembers(code: string, callback: (members: PartyMember[]) => void) {
   const membersRef = ref(db, `rooms/${code}/members`)
-  const handler = onValue(membersRef, (snap) => {
+  const unsubscribe = onValue(membersRef, (snap) => {
     const val = snap.val() || {}
     callback(Object.values(val))
   })
-  return () => off(membersRef, 'value', handler)
+  return unsubscribe
 }
 
 export function listenToRoomSkins(code: string, callback: (skins: Record<string, PartySkinEntry>) => void) {
   const skinsRef = ref(db, `rooms/${code}/activeSkins`)
-  const handler = onValue(skinsRef, (snap) => {
+  const unsubscribe = onValue(skinsRef, (snap) => {
     callback(snap.val() || {})
   })
-  return () => off(skinsRef, 'value', handler)
+  return unsubscribe
 }
 
 // SADECE "Aktif Et" tıklanınca çağrılacak — indirme aşamasında çağrılmıyor
