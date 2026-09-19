@@ -11,8 +11,6 @@ import {
   PartyPopper,
   Settings,
   X,
-  Moon,
-  Sun,
   Save,
   type LucideIcon
 } from 'lucide-react'
@@ -67,13 +65,6 @@ export default function Sidebar({
   onInstallUpdate
 }: SidebarProps) {
   const [showSettingsModal, setShowSettingsModal] = useState(false)
-  const [activeSettingsTab, setActiveSettingsTab] = useState<'paths' | 'themes'>('paths')
-  const [themeMode, setThemeMode] = useState<'dark' | 'light'>(() => {
-    return (localStorage.getItem('themeMode') as 'dark' | 'light') || 'dark'
-  })
-  const [accentColor, setAccentColor] = useState<'blue' | 'purple' | 'green' | 'orange'>(() => {
-    return (localStorage.getItem('accentColor') as 'blue' | 'purple' | 'green' | 'orange') || 'blue'
-  })
   const [champFilter, setChampFilter] = useState('')
   const listRef = useRef<HTMLDivElement>(null)
 const letterRefs = useRef<Record<string, HTMLDivElement | null>>({})
@@ -89,16 +80,6 @@ const letterRefs = useRef<Record<string, HTMLDivElement | null>>({})
       listRef.current?.scrollTo(0, 0)
     }
   }, [tab, champFilter])
-
-  // Theme persistence
-  useEffect(() => {
-    localStorage.setItem('themeMode', themeMode)
-    document.documentElement.classList.toggle('dark', themeMode === 'dark')
-  }, [themeMode])
-
-  useEffect(() => {
-    localStorage.setItem('accentColor', accentColor)
-  }, [accentColor])
 
   // Close modal on Esc key
   useEffect(() => {
@@ -353,34 +334,9 @@ const renderChampionRow = (c: (typeof filteredChampions)[number]) => (
             </button>
           </div>
 
-          {/* Tabs */}
-          <div className="flex border-b border-white/[0.06]">
-            <button
-              onClick={() => setActiveSettingsTab('paths')}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition ${
-                activeSettingsTab === 'paths'
-                  ? 'text-sky-300 border-b-2 border-sky-400 bg-sky-500/10'
-                  : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              Yollar
-            </button>
-            <button
-              onClick={() => setActiveSettingsTab('themes')}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition ${
-                activeSettingsTab === 'themes'
-                  ? 'text-sky-300 border-b-2 border-sky-400 bg-sky-500/10'
-                  : 'text-gray-400 hover:text-gray-200'
-              }`}
-            >
-              Temalar
-            </button>
-          </div>
-
           {/* Tab Content */}
           <div className="p-4 overflow-y-auto max-h-[60vh]">
-            {activeSettingsTab === 'paths' && (
-              <div className="space-y-3">
+            <div className="space-y-3">
                 {(
                   [
                     { field: 'patcherPath' as const, label: 'Patcher EXE', placeholder: "ltk_patcher_host.exe'nin tam yolu" },
@@ -404,61 +360,6 @@ const renderChampionRow = (c: (typeof filteredChampions)[number]) => (
                   </div>
                 ))}
               </div>
-            )}
-
-            {activeSettingsTab === 'themes' && (
-              <div className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-300 mb-3">Mod</h3>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setThemeMode('dark')}
-                      className={`flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition ${
-                        themeMode === 'dark'
-                          ? 'bg-sky-500/20 border border-sky-500/40 text-sky-300'
-                          : 'bg-white/[0.04] text-gray-400 hover:bg-white/[0.08]'
-                      }`}
-                    >
-                      <Moon className="w-3.5 h-3.5" strokeWidth={2} /> Karanlık
-                    </button>
-                    <button
-                      onClick={() => setThemeMode('light')}
-                      className={`flex-1 inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition ${
-                        themeMode === 'light'
-                          ? 'bg-sky-500/20 border border-sky-500/40 text-sky-300'
-                          : 'bg-white/[0.04] text-gray-400 hover:bg-white/[0.08]'
-                      }`}
-                    >
-                      <Sun className="w-3.5 h-3.5" strokeWidth={2} /> Aydınlık
-                    </button>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-300 mb-3">Vurgu Rengi</h3>
-                  <div className="flex gap-2">
-                    {[
-                      { color: 'blue' as const, label: 'Mavi', activeClass: 'bg-blue-500/20 border-blue-500/40 text-blue-300' },
-                      { color: 'purple' as const, label: 'Mor', activeClass: 'bg-purple-500/20 border-purple-500/40 text-purple-300' },
-                      { color: 'green' as const, label: 'Yeşil', activeClass: 'bg-green-500/20 border-green-500/40 text-green-300' },
-                      { color: 'orange' as const, label: 'Turuncu', activeClass: 'bg-orange-500/20 border-orange-500/40 text-orange-300' }
-                    ].map(({ color, label, activeClass }) => (
-                      <button
-                        key={color}
-                        onClick={() => setAccentColor(color)}
-                        className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition ${
-                          accentColor === color
-                            ? activeClass
-                            : 'bg-white/[0.04] text-gray-400 hover:bg-white/[0.08]'
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
 
           {/* Modal Footer */}

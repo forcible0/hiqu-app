@@ -7,7 +7,7 @@ import SkinModal from './components/SkinModal'
 import QueueBar from './components/QueueBar'
 import Toasts from './components/Toasts'
 import PartyModal from './components/PartyModal'
-import { getDeviceId, getSavedRoomCode, createRoom, joinRoom, leaveRoom, listenToMembers, listenToRoomSkins, broadcastActiveSkin, PartyMember, PartySkinEntry } from './party'
+import { getDeviceId, getSavedRoomCode, createRoom, joinRoom, leaveRoom, listenToMembers, listenToRoomSkins, broadcastActiveSkin, getProcessedMap, setProcessedEntry, PartyMember, PartySkinEntry } from './party'
 import { Check, Square, Trash2, ArrowLeft, Palette, Heart, Package, Dices, Wand2, Search, type LucideIcon } from 'lucide-react'
 
 
@@ -492,11 +492,16 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
 
   const refreshDownloaded = () => {
     if (window.electronAPI) {
-      window.electronAPI.getDownloadedSkins().then(setDownloadedMetas)
+      return window.electronAPI.getDownloadedSkins().then(setDownloadedMetas)
     }
+    return Promise.resolve()
   }
 
 // İlk yükleme: şampiyonlar, ayarlar, indirilenler, aktif skinler
+// İlk "indirilenler" yüklemesi bitene kadar parti'den gelen aktivasyonları işlemeye başlamıyoruz
+  // (yoksa disk henüz okunmadan "indirilmemiş" sanılıp zaten indirilmiş bir skin tekrar indirilmeye çalışılır)
+  const initialDownloadedLoadedRef = useRef(false)
+
   useEffect(() => {
     fetchChampions()
       .then(setChampions)
@@ -504,11 +509,15 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
     if (window.electronAPI) {
       window.electronAPI.getSettings().then(setSettings)
       window.electronAPI.getAppVersion().then(setAppVersion)
-      refreshDownloaded()
+      refreshDownloaded().finally(() => {
+        initialDownloadedLoadedRef.current = true
+      })
       window.electronAPI.getActiveSkins().then((ids) => {
         setActiveSkins(ids)
         setPatcherRunning(ids.length > 0)
       })
+    } else {
+      initialDownloadedLoadedRef.current = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -528,7 +537,7 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
   const activeSetRef = useRef(activeSet)
   const downloadedIdsRef = useRef(downloadedIds)
   const championsRef = useRef(champions)
-  const handleApplyRef = useRef<((meta: SkinMeta) => Promise<void>) | null>(null)
+  const handleApplyRef = useRef<((meta: SkinMeta, chromaOf?: string) => Promise<void>) | null>(null)
 
   useEffect(() => {
     activeSetRef.current = activeSet
@@ -540,42 +549,88 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
   useEffect(() => {
     if (!partyRoomCode) return
     const myDeviceId = getDeviceId()
-    const unsubscribe = listenToRoomSkins(partyRoomCode, (skins) => {
+    // Odaya (yeniden) bağlanırken daha önce bu odada işlenmiş kayıtları
+    // localStorage'dan yükle — yoksa uygulama kapanıp açıldığında Firebase'in
+    // yolladığı geçmiş activeSkins verisi baştan işlenmeye çalışılır.
+    partyProcessedRef.current = getProcessedMap(partyRoomCode)
+
+    let cancelled = false
+    let pendingSkins: Record<string, PartySkinEntry> | null = null
+
+    const processSkins = (skins: Record<string, PartySkinEntry>) => {
       Object.values(skins).forEach(async (entry: PartySkinEntry) => {
+        if (cancelled) return
         if (entry.setBy === myDeviceId) return
         if (partyProcessedRef.current[entry.championId] === entry.setAt) return
-        if (partyProcessingRef.current.has(entry.skinId)) return
-        if (activeSetRef.current.has(entry.skinId)) {
+        // chroma seçiliyse gerçekte indirilip aktive edilecek olan id chroma'nınkidir
+        const targetId = entry.chromaId || entry.skinId
+        if (partyProcessingRef.current.has(targetId)) return
+        if (activeSetRef.current.has(targetId)) {
           partyProcessedRef.current[entry.championId] = entry.setAt
+          setProcessedEntry(partyRoomCode, entry.championId, entry.setAt)
           return
         }
 
         partyProcessedRef.current[entry.championId] = entry.setAt
-        partyProcessingRef.current.add(entry.skinId)
+        setProcessedEntry(partyRoomCode, entry.championId, entry.setAt)
+        partyProcessingRef.current.add(targetId)
 
         try {
           addToast('info', `Parti: "${entry.name}" arkadaşın tarafından aktive edildi, indiriliyor...`)
           const championKey = championsRef.current.find((c) => c.id === entry.championId)?.key || ''
           const partyMeta: SkinMeta = {
-  id: entry.skinId,
-  name: entry.name,
-  num: entry.num,                  // ✅ gelen değeri kullan
-  championId: entry.championId,
-  championKey,
-  championName: entry.championName
-}
-          if (!downloadedIdsRef.current.has(entry.skinId)) {
-            await window.electronAPI?.downloadSkin({ championKey, skinId: entry.skinId, meta: partyMeta })
-            downloadedIdsRef.current = new Set(downloadedIdsRef.current).add(entry.skinId)
+            id: targetId,
+            name: entry.name,
+            num: entry.num,
+            championId: entry.championId,
+            championKey,
+            championName: entry.championName
+          }
+          if (!downloadedIdsRef.current.has(targetId)) {
+            if (entry.chromaId) {
+              await window.electronAPI?.downloadChroma({
+                championKey,
+                skinId: entry.skinId,
+                chromaId: entry.chromaId,
+                meta: partyMeta
+              })
+            } else {
+              await window.electronAPI?.downloadSkin({ championKey, skinId: entry.skinId, meta: partyMeta })
+            }
+            downloadedIdsRef.current = new Set(downloadedIdsRef.current).add(targetId)
             refreshDownloaded()
           }
           await handleApplyRef.current?.(partyMeta)
         } finally {
-          partyProcessingRef.current.delete(entry.skinId)
+          partyProcessingRef.current.delete(targetId)
         }
       })
+    }
+
+    const unsubscribe = listenToRoomSkins(partyRoomCode, (skins) => {
+      // İndirilenler listesi diskten henüz okunmadıysa işlemeyi ertele —
+      // yoksa "indirilmemiş" sanılıp zaten indirilmiş bir skin tekrar
+      // indirilmeye çalışılır (kısa süreli bir yarış durumu).
+      if (!initialDownloadedLoadedRef.current) {
+        pendingSkins = skins
+        return
+      }
+      processSkins(skins)
     })
-    return () => unsubscribe()
+
+    // İlk yükleme bitince bekleyen (varsa) son snapshot'ı işle
+    const waitId = window.setInterval(() => {
+      if (initialDownloadedLoadedRef.current) {
+        window.clearInterval(waitId)
+        if (pendingSkins) processSkins(pendingSkins)
+      }
+    }, 150)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(waitId)
+      unsubscribe()
+    }
   }, [partyRoomCode])
 
   useEffect(() => {
@@ -805,7 +860,7 @@ const handleRandomSkin = async () => {
 
   // --- Aktivasyon (tekil) ---
 
-  const handleApply = async (meta: SkinMeta) => {
+  const handleApply = async (meta: SkinMeta, chromaOf?: string) => {
     if (!window.electronAPI) return
     if (applyingIds.has(meta.id)) return
     if (activeSet.has(meta.id)) {
@@ -828,8 +883,11 @@ const handleRandomSkin = async () => {
     }
     res.warnings?.forEach((w) => addToast('warning', w))
        if (partyRoomCode) {
+      // chromaOf verilmişse meta.id aslında chroma'nın kendi id'si — asıl
+      // (indirme için gereken) skin id chromaOf'tur, chroma id ayrıca gönderilir.
       broadcastActiveSkin(partyRoomCode, {
-        skinId: meta.id,
+        skinId: chromaOf || meta.id,
+        chromaId: chromaOf ? meta.id : undefined,
         name: meta.name,
         championId: meta.championId,
         championName: meta.championName,
@@ -1289,7 +1347,7 @@ const handleRandomSkin = async () => {
       onDownload={() =>
         selectedChroma ? handleDownloadChroma(modalMeta, selectedChroma) : handleDownload(modalMeta)
       }
-      onApply={() => handleApply(activeModalMeta)}
+      onApply={() => handleApply(activeModalMeta, selectedChroma ? modalMeta.id : undefined)}
       onDeactivate={() => handleDeactivate(activeModalMeta)}
       onRemove={() => handleRemove(activeModalMeta)}
       onToggleFavorite={() => toggleFavorite(activeModalMeta)}

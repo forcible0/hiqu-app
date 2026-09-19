@@ -21,6 +21,7 @@ export interface PartySkinEntry {
 const DEVICE_ID_KEY = 'hiqu_device_id'
 const ROOM_CODE_KEY = 'hiqu_party_room'
 const MEMBER_NAME_KEY = 'hiqu_party_name'
+const PROCESSED_KEY_PREFIX = 'hiqu_party_processed_'
 
 export function getDeviceId(): string {
   let id = localStorage.getItem(DEVICE_ID_KEY)
@@ -82,6 +83,35 @@ export async function leaveRoom(code: string) {
   const deviceId = getDeviceId()
   await remove(ref(db, `rooms/${code}/members/${deviceId}`))
   localStorage.removeItem(ROOM_CODE_KEY)
+  clearProcessedMap(code)
+}
+
+// Parti'den gelen aktivasyonların "işlendi" bilgisini kalıcı tutar (championId -> setAt).
+// Bu bilgi sadece bellekte (useRef) tutulursa uygulama kapanıp açıldığında sıfırlanır;
+// eğer odaya otomatik yeniden bağlanılırsa Firebase o odanın TÜM geçmiş activeSkins
+// verisini yeniden yollar ve her şey "yeni" sanılıp tekrar indirilip aktive edilmeye
+// çalışılır. localStorage'a yazarak bunu kalıcı hale getiriyoruz.
+export function getProcessedMap(code: string): Record<string, number> {
+  try {
+    const raw = localStorage.getItem(PROCESSED_KEY_PREFIX + code)
+    return raw ? JSON.parse(raw) : {}
+  } catch {
+    return {}
+  }
+}
+
+export function setProcessedEntry(code: string, championId: string, setAt: number) {
+  const map = getProcessedMap(code)
+  map[championId] = setAt
+  try {
+    localStorage.setItem(PROCESSED_KEY_PREFIX + code, JSON.stringify(map))
+  } catch {
+    // localStorage dolu/erişilemez olsa bile akışı bozmasın
+  }
+}
+
+export function clearProcessedMap(code: string) {
+  localStorage.removeItem(PROCESSED_KEY_PREFIX + code)
 }
 
 // onValue() zaten kendi unsubscribe fonksiyonunu döndürür — off() ile
