@@ -7,7 +7,7 @@ import SkinModal from './components/SkinModal'
 import QueueBar from './components/QueueBar'
 import Toasts from './components/Toasts'
 import PartyModal from './components/PartyModal'
-import { getDeviceId, getSavedRoomCode, createRoom, joinRoom, leaveRoom, listenToMembers, listenToRoomSkins, broadcastActiveSkin, getProcessedMap, setProcessedEntry, PartyMember, PartySkinEntry } from './party'
+import { getDeviceId, getSavedRoomCode, createRoom, joinRoom, leaveRoom, listenToMembers, listenToRoomSkins, listenToRemovedSkins, broadcastActiveSkin, removeActiveSkin, getProcessedMap, setProcessedEntry, PartyMember, PartySkinEntry } from './party'
 import { Check, Square, Trash2, ArrowLeft, Palette, Heart, Package, Dices, Wand2, Search, type LucideIcon } from 'lucide-react'
 
 
@@ -456,6 +456,8 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
       const res = await window.electronAPI.removeSkin({ skinId: meta.id })
       if (!res.success) {
         addToast('error', `"${meta.name}" silinemedi: ${res.error || 'Bilinmeyen hata'}`)
+      } else {
+        maybeBroadcastRemoval(meta)
       }
     }
     addToast('success', 'Tüm indirilenler silindi')
@@ -475,6 +477,8 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
         const res = await window.electronAPI.removeSkin({ skinId: id })
         if (!res.success) {
           addToast('error', `"${meta.name}" silinemedi: ${res.error || 'Bilinmeyen hata'}`)
+        } else {
+          maybeBroadcastRemoval(meta)
         }
       }
     }
@@ -534,6 +538,10 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
 
   const partyProcessedRef = useRef<Record<string, number>>({})
   const partyProcessingRef = useRef<Set<string>>(new Set())
+  // Odadaki en güncel activeSkins anlık görüntüsü — handleRemove'ın "bu skin
+  // hâlâ benim partiye gönderdiğim güncel kayıt mı?" kontrolü için senkron
+  // olarak buradan okunur (React state'i beklemeye gerek kalmadan).
+  const partyActiveEntriesRef = useRef<Record<string, PartySkinEntry>>({})
   const activeSetRef = useRef(activeSet)
   const downloadedIdsRef = useRef(downloadedIds)
   const championsRef = useRef(champions)
@@ -608,6 +616,7 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
     }
 
     const unsubscribe = listenToRoomSkins(partyRoomCode, (skins) => {
+      partyActiveEntriesRef.current = skins
       // İndirilenler listesi diskten henüz okunmadıysa işlemeyi ertele —
       // yoksa "indirilmemiş" sanılıp zaten indirilmiş bir skin tekrar
       // indirilmeye çalışılır (kısa süreli bir yarış durumu).
@@ -631,6 +640,32 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
       window.clearInterval(waitId)
       unsubscribe()
     }
+  }, [partyRoomCode])
+
+  // Bir parti üyesi kendi aktive ettiği skini Firebase'den kaldırdığında
+  // (bkz. handleRemove) burada yakalanır ve bizim tarafımızda da kaldırılır.
+  // onChildRemoved eski (silinmiş) kayıtları tekrar oynatmadığı için burada
+  // "aktivasyon" dinleyicisindeki restart/replay riski yok, ekstra bir
+  // kalıcı-kayıt takibine gerek kalmıyor.
+  useEffect(() => {
+    if (!partyRoomCode) return
+    const myDeviceId = getDeviceId()
+    const unsubscribe = listenToRemovedSkins(partyRoomCode, async (_championId, entry) => {
+      if (entry.setBy === myDeviceId) return // kendi sildiğimizi tekrar işlemeyelim
+      const targetId = entry.chromaId || entry.skinId
+      if (!downloadedIdsRef.current.has(targetId)) return // zaten bizde yoksa yapacak bir şey yok
+      try {
+        addToast('info', `Parti: "${entry.name}" arkadaşın tarafından kaldırıldı, senden de kaldırılıyor...`)
+        await window.electronAPI?.removeSkin({ skinId: targetId })
+        downloadedIdsRef.current = new Set(
+          [...downloadedIdsRef.current].filter((id) => id !== targetId)
+        )
+        refreshDownloaded()
+      } catch (err) {
+        console.error('Parti silme senkronizasyonu başarısız:', err)
+      }
+    })
+    return () => unsubscribe()
   }, [partyRoomCode])
 
   useEffect(() => {
@@ -887,7 +922,7 @@ const handleRandomSkin = async () => {
       // (indirme için gereken) skin id chromaOf'tur, chroma id ayrıca gönderilir.
       broadcastActiveSkin(partyRoomCode, {
         skinId: chromaOf || meta.id,
-        chromaId: chromaOf ? meta.id : undefined,
+        ...(chromaOf ? { chromaId: meta.id } : {}),
         name: meta.name,
         championId: meta.championId,
         championName: meta.championName,
@@ -912,6 +947,26 @@ const handleRandomSkin = async () => {
 
   // --- Kaldırma ---
 
+  // Silinen skin partide bir şampiyon için kayıtlıysa (kim aktive etmiş olursa
+  // olsun), bunu kalıcı olarak "işlendi" işaretliyoruz — yoksa partiden çıkıp
+  // aynı odaya tekrar girdiğinde (o zaman kayıt temizlenir) aynı skin sana
+  // tekrar otomatik iner. Ayrıca skin BENİM (bu cihazın) gönderdiğim güncel
+  // kayıtsa, Firebase'deki kaydı da sileriz ki arkadaşımdan da kaldırılsın —
+  // ama bu SADECE arkadaşın tarafını etkiler, kendi yerel silmemi hiçbir
+  // zaman engellemez.
+  const maybeBroadcastRemoval = (meta: SkinMeta) => {
+    if (!partyRoomCode || !meta.championId) return
+    const entry = partyActiveEntriesRef.current[meta.championId]
+    if (!entry) return
+    const entryTargetId = entry.chromaId || entry.skinId
+    if (entryTargetId !== meta.id) return
+    setProcessedEntry(partyRoomCode, meta.championId, entry.setAt)
+    partyProcessedRef.current[meta.championId] = entry.setAt
+    if (entry.setBy === getDeviceId()) {
+      removeActiveSkin(partyRoomCode, meta.championId)
+    }
+  }
+
   const handleRemove = async (meta: SkinMeta) => {
     if (!window.electronAPI) return
     setRemovingIds((prev) => setAdd(prev, meta.id))
@@ -922,6 +977,7 @@ const handleRandomSkin = async () => {
       setQueue((prev) => prev.filter((q) => q.id !== meta.id))
       refreshDownloaded()
       if (modalMeta?.id === meta.id) setModalMeta(null)
+      maybeBroadcastRemoval(meta)
     } else {
       addToast('error', res.error || 'Skin kaldırılamadı')
     }

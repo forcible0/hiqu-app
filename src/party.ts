@@ -1,5 +1,5 @@
 import { db } from './firebase'
-import { ref, set, get, onValue, remove, update } from 'firebase/database'
+import { ref, set, get, onValue, onChildRemoved, remove, update } from 'firebase/database'
 
 export interface PartyMember {
   id: string
@@ -143,4 +143,27 @@ export async function broadcastActiveSkin(code: string, entry: Omit<PartySkinEnt
     setBy: deviceId,
     setAt: Date.now()
   })
+}
+
+// Bir şampiyon için parti kaydını tamamen kaldırır — kişi kendi aktive ettiği
+// skini silince çağrılır, böylece diğer üyeler de onu kendi taraflarında
+// kaldırabilsin.
+export function removeActiveSkin(code: string, championId: string) {
+  return remove(ref(db, `rooms/${code}/activeSkins/${championId}`))
+}
+
+// Bir kayıt Firebase'den silindiğinde tetiklenir (silinmeden hemen önceki
+// değeriyle birlikte). onChildRemoved, onValue'nun aksine, dinlemeye
+// başladığın andan ÖNCE silinmiş kayıtları tekrar oynatmaz — yani "aktivasyon"
+// dinleyicisinde çözdüğümüz restart/replay yarış durumu burada zaten yok.
+export function listenToRemovedSkins(
+  code: string,
+  callback: (championId: string, entry: PartySkinEntry) => void
+) {
+  const skinsRef = ref(db, `rooms/${code}/activeSkins`)
+  const unsubscribe = onChildRemoved(skinsRef, (snap) => {
+    const val = snap.val()
+    if (snap.key && val) callback(snap.key, val as PartySkinEntry)
+  })
+  return unsubscribe
 }

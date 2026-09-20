@@ -4,7 +4,7 @@ const { spawn } = require('child_process')
 const https = require('https')
 const fs = require('fs')
 const path = require('path')
-const { mergeWads } = require('./wad.js')
+const { mergeWads, parseWad, readWadHashes } = require('./wad.js')
 
 let mainWindow = null
 
@@ -26,6 +26,16 @@ try {
   console.error('Eski ayarlar taşınamadı:', e.message)
 }
 const LEAGUE_SKINS_BASE = 'https://raw.githubusercontent.com/forcible0/LoLskins/main/skins'
+
+// Skin/chroma/şampiyon ID'lerini doğrular — bu değerler her zaman kendi
+// API'mizden gelmiyor: Parti Modu'nda Firebase'den (potansiyel olarak
+// güvenilmeyen bir kaynaktan — odaya yazabilen herkesten) geliyor. path.join
+// ile dosya yoluna eklenmeden önce mutlaka sayısal ve makul uzunlukta
+// olduğu doğrulanmalı, yoksa "../../.." gibi bir payload SKINS_DIR dışına
+// çıkıp rastgele bir konuma dosya yazdırabilir (path traversal).
+function isValidId(id) {
+  return typeof id === 'string' && /^\d+$/.test(id) && id.length <= 20
+}
 
 function readSettings() {
   try {
@@ -344,7 +354,54 @@ function findGameWad(gameDir, wadName) {
   return findInGame(gameDir, 0)
 }
 
-// Overlay'i TÜM aktif skinlerle yeniden kur.
+// Cross-wad indeks: bir chunk (hash) hem şampiyonun kendi wad'ında hem de
+// paylaşılan wad'larda (Common, Global, harita wad'ları) aynı anda
+// bulunabilir. LTK'nin resmi overlay builder'ı ("Hash index: path_hash ->
+// o chunk'ı içeren TÜM wad'ların listesi" / "Distribute mod files to all
+// affected WADs, e.g. champion assets in Map WADs") tam olarak bunun için
+// bir indeks kuruyor. Biz de aynısını, sadece ilgili adayları tarayarak
+// (performans için tüm DATA/FINAL değil) yapıyoruz: yalnızca header+TOC
+// okunuyor (readWadHashes), veri kısmına hiç dokunulmuyor — yüzlerce MB'lık
+// bir harita wad'ı için bile bu birkaç milisaniye sürer.
+function buildCrossWadIndex(gameDir) {
+  const candidates = []
+  const championsDir = path.join(gameDir, 'DATA', 'FINAL', 'Champions')
+  if (fs.existsSync(championsDir)) {
+    for (const f of fs.readdirSync(championsDir)) {
+      if (/\.wad\.client$/i.test(f)) candidates.push(path.join(championsDir, f))
+    }
+  }
+  const mapsShippingDir = path.join(gameDir, 'DATA', 'FINAL', 'Maps', 'Shipping')
+  if (fs.existsSync(mapsShippingDir)) {
+    for (const f of fs.readdirSync(mapsShippingDir)) {
+      if (/\.wad\.client$/i.test(f)) candidates.push(path.join(mapsShippingDir, f))
+    }
+  }
+  const globalWad = path.join(gameDir, 'DATA', 'FINAL', 'Global.wad.client')
+  if (fs.existsSync(globalWad)) candidates.push(globalWad)
+
+  // hash -> Set<wadPath>
+  const index = new Map()
+  for (const wadPath of candidates) {
+    let hashes
+    try {
+      hashes = readWadHashes(wadPath)
+    } catch {
+      continue // bozuk/okunamayan bir wad indekslemeyi durdurmasın
+    }
+    for (const h of hashes) {
+      let set = index.get(h)
+      if (!set) {
+        set = new Set()
+        index.set(h, set)
+      }
+      set.add(wadPath)
+    }
+  }
+  return index
+}
+
+
 // LTK Manager / cslol-manager gibi, mod wad'ındaki chunk'lar oyunun asıl wad'ının
 // ÜZERİNE bindirilir. Mod dosyası sadece değişen chunk'ları içerir (birkaç KB olması
 // normal) — mod dosyasını olduğu gibi kopyalamak boş bir oyun görünümüne yol açar,
@@ -365,6 +422,10 @@ function rebuildOverlay(skinIds, gameDir) {
   const warnings = []
 
   for (const skinId of skinIds) {
+    if (!isValidId(skinId)) {
+      warnings.push(`Geçersiz skin ID atlandı: ${skinId}`)
+      continue
+    }
     const modPath = path.join(SKINS_DIR, `${skinId}.fantome`)
     if (!fs.existsSync(modPath)) {
       warnings.push(`Skin dosyası bulunamadı: ${skinId}`)
@@ -406,6 +467,10 @@ function rebuildOverlay(skinIds, gameDir) {
   }
 
   let mergedCount = 0
+  // Cross-wad indeksi bu rebuild'de bir kez kurulur, tüm skin grupları için
+  // paylaşılır (her seferinde yeniden taramak gereksiz).
+  const crossWadIndex = buildCrossWadIndex(gameDir)
+
   for (const { name, files } of wadGroups.values()) {
     const gameWadPath = findGameWad(gameDir, name)
     if (!gameWadPath) {
@@ -422,6 +487,40 @@ function rebuildOverlay(skinIds, gameDir) {
       currentBuf = fs.readFileSync(outPath)
     }
     mergedCount++
+
+    // Cross-wad dağıtım: modun değiştirdiği hash'lerden herhangi biri
+    // Common/Global/harita wad'ları gibi paylaşılan dosyalarda da varsa,
+    // aynı override'ı oraya da uygula — yoksa oyun gerçek bir maçta o
+    // paylaşılan (değiştirilmemiş) kopyayı okuyup tutarsızlık/çökme yaşar.
+    const modHashes = new Set()
+    for (const modFile of files) {
+      try {
+        const parsed = parseWad(fs.readFileSync(modFile))
+        for (const e of parsed.entries) modHashes.add(e.hash)
+      } catch {
+        // parse edilemeyen mod dosyası zaten yukarıda normal merge'de de sorun çıkarmıştır
+      }
+    }
+    const affectedWads = new Set()
+    for (const h of modHashes) {
+      const wads = crossWadIndex.get(h)
+      if (wads) for (const w of wads) affectedWads.add(w)
+    }
+    affectedWads.delete(gameWadPath) // az önce işlendi
+
+    for (const otherWadPath of affectedWads) {
+      const otherDest = path.relative(gameDir, otherWadPath)
+      const otherOutPath = path.join(overlayDir, otherDest)
+      fs.mkdirSync(path.dirname(otherOutPath), { recursive: true })
+      // Başka bir skin grubu bu wad'ı bu rebuild içinde zaten güncellediyse
+      // onun üzerine devam et (overlay'deki en güncel hali kullan)
+      let otherBuf = fs.existsSync(otherOutPath) ? fs.readFileSync(otherOutPath) : fs.readFileSync(otherWadPath)
+      for (const modFile of files) {
+        mergeWads(otherBuf, fs.readFileSync(modFile), otherOutPath)
+        otherBuf = fs.readFileSync(otherOutPath)
+      }
+      warnings.push(`"${name}" paylaşılan varlıkları güncellendi: ${otherDest}`)
+    }
   }
 
   if (mergedCount === 0) {
@@ -561,7 +660,7 @@ ipcMain.handle('get-downloaded-skins', () => {
 
 // Tekil skin indirme (LeagueSkins reposundan - .fantome formatı)
 ipcMain.handle('download-skin', async (_event, { championKey, skinId, meta }) => {
-  if (!championKey || !skinId) {
+  if (!isValidId(championKey) || !isValidId(skinId)) {
     return { success: false, error: 'Geçersiz şampiyon veya skin ID' }
   }
   const url = `${LEAGUE_SKINS_BASE}/${championKey}/${skinId}/${skinId}.fantome`
@@ -595,7 +694,7 @@ ipcMain.handle('download-skin', async (_event, { championKey, skinId, meta }) =>
 // Chroma indirme: chromalar ana skinin alt klasöründe durur.
 //   skins/{championKey}/{skinId}/{chromaId}/{chromaId}.fantome
 ipcMain.handle('download-chroma', async (_event, { championKey, skinId, chromaId, meta }) => {
-  if (!championKey || !skinId || !chromaId) {
+  if (!isValidId(championKey) || !isValidId(skinId) || !isValidId(chromaId)) {
     return { success: false, error: 'Geçersiz şampiyon, skin veya chroma ID' }
   }
   const url = `${LEAGUE_SKINS_BASE}/${championKey}/${skinId}/${chromaId}/${chromaId}.fantome`
@@ -629,6 +728,9 @@ ipcMain.handle('download-chroma', async (_event, { championKey, skinId, chromaId
 // Skin kaldırma: yerel .fantome dosyasını sil + aktif listeden düş +
 // overlay'i kalan skinlerle güncelle (diğer aktif skinler çalışmaya devam eder)
 ipcMain.handle('remove-skin', (_event, { skinId }) => {
+  if (!isValidId(skinId)) {
+    return { success: false, error: 'Geçersiz skin ID' }
+  }
   const filePath = path.join(SKINS_DIR, `${skinId}.fantome`)
   sendToRenderer('remove-status', { skinId, state: 'started', message: 'Kaldırılıyor...' })
 
@@ -676,7 +778,7 @@ ipcMain.handle('apply-skins', (_event, { skinIds }) => {
   const alreadyActive = []
   let added = 0
   for (const id of skinIds) {
-    if (!fs.existsSync(path.join(SKINS_DIR, `${id}.fantome`))) {
+    if (!isValidId(id) || !fs.existsSync(path.join(SKINS_DIR, `${id}.fantome`))) {
       missing.push(id)
       continue
     }
@@ -705,7 +807,7 @@ ipcMain.handle('apply-skins', (_event, { skinIds }) => {
 
 // Tek skini aktif kümeden çıkar (diğer aktif skinler çalışmaya devam eder)
 ipcMain.handle('deactivate-skin', (_event, { skinId }) => {
-  if (!activeSkins.has(skinId)) {
+  if (!isValidId(skinId) || !activeSkins.has(skinId)) {
     return { success: false, error: 'Skin zaten aktif değil' }
   }
   activeSkins.delete(skinId)
