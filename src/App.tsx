@@ -452,7 +452,13 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
       return
     }
 
+    let blockedCount = 0
     for (const meta of downloadedMetas) {
+      const blocked = getPartyBlock(meta)
+      if (blocked) {
+        blockedCount++
+        continue
+      }
       const res = await window.electronAPI.removeSkin({ skinId: meta.id })
       if (!res.success) {
         addToast('error', `"${meta.name}" silinemedi: ${res.error || 'Bilinmeyen hata'}`)
@@ -460,7 +466,10 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
         maybeBroadcastRemoval(meta)
       }
     }
-    addToast('success', 'Tüm indirilenler silindi')
+    if (blockedCount > 0) {
+      addToast('warning', `${blockedCount} skin arkadaşın tarafından aktive edildiği için atlandı`)
+    }
+    addToast('success', 'İndirilenler silindi')
     refreshDownloaded()
   }
 
@@ -471,9 +480,15 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
       return
     }
 
+    let blockedCount = 0
     for (const id of selectedIds) {
       const meta = downloadedMetas.find((m) => m.id === id)
       if (meta) {
+        const blocked = getPartyBlock(meta)
+        if (blocked) {
+          blockedCount++
+          continue
+        }
         const res = await window.electronAPI.removeSkin({ skinId: id })
         if (!res.success) {
           addToast('error', `"${meta.name}" silinemedi: ${res.error || 'Bilinmeyen hata'}`)
@@ -481,6 +496,9 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
           maybeBroadcastRemoval(meta)
         }
       }
+    }
+    if (blockedCount > 0) {
+      addToast('warning', `${blockedCount} skin arkadaşın tarafından aktive edildiği için atlandı`)
     }
     addToast('success', 'Seçilenler silindi')
     setSelectedIds(new Set())
@@ -936,6 +954,11 @@ const handleRandomSkin = async () => {
 
   const handleDeactivate = async (meta: SkinMeta) => {
     if (!window.electronAPI) return
+    const blocked = getPartyBlock(meta)
+    if (blocked) {
+      addToast('warning', `"${meta.name}" arkadaşın tarafından aktive edildi, sadece o pasifleştirebilir`)
+      return
+    }
     const res = await window.electronAPI.deactivateSkin({ skinId: meta.id })
     if (!res.success) {
       addToast('error', res.error || 'Skin pasifleştirilemedi')
@@ -947,28 +970,42 @@ const handleRandomSkin = async () => {
 
   // --- Kaldırma ---
 
-  // Silinen skin partide bir şampiyon için kayıtlıysa (kim aktive etmiş olursa
-  // olsun), bunu kalıcı olarak "işlendi" işaretliyoruz — yoksa partiden çıkıp
-  // aynı odaya tekrar girdiğinde (o zaman kayıt temizlenir) aynı skin sana
-  // tekrar otomatik iner. Ayrıca skin BENİM (bu cihazın) gönderdiğim güncel
-  // kayıtsa, Firebase'deki kaydı da sileriz ki arkadaşımdan da kaldırılsın —
-  // ama bu SADECE arkadaşın tarafını etkiler, kendi yerel silmemi hiçbir
-  // zaman engellemez.
+  // Parti'deyken bir şampiyonun skinini SADECE onu aktive eden kişi
+  // silebilir/pasifleştirebilir; başkasının skinine dokunulmaya çalışılırsa
+  // bu, o kaydı (ve dolayısıyla arkadaşının bilgisayarındaki dosyayı) döner —
+  // partiden ayrılınca (partyRoomCode boşalınca) kısıtlama kendiliğinden
+  // kalkar, herkes yine kendi indirdiği/aktifleştirdiği gibi normal şekilde
+  // yönetebilir.
+  const getPartyBlock = (meta: SkinMeta): PartySkinEntry | null => {
+    if (!partyRoomCode || !meta.championId) return null
+    const entry = partyActiveEntriesRef.current[meta.championId]
+    if (!entry) return null
+    const entryTargetId = entry.chromaId || entry.skinId
+    if (entryTargetId !== meta.id) return null
+    if (entry.setBy === getDeviceId()) return null
+    return entry
+  }
+
+  // Skin partide hâlâ BENİM (bu cihazın) o şampiyon için gönderdiğim güncel
+  // kayıtsa, Firebase'deki kaydı da sil — böylece arkadaşımın bilgisayarından
+  // da otomatik kaldırılır. Başkasının skinini silme zaten getPartyBlock ile
+  // engellendiği için buraya her zaman "benim" bir kayıt gelir.
   const maybeBroadcastRemoval = (meta: SkinMeta) => {
     if (!partyRoomCode || !meta.championId) return
     const entry = partyActiveEntriesRef.current[meta.championId]
     if (!entry) return
     const entryTargetId = entry.chromaId || entry.skinId
     if (entryTargetId !== meta.id) return
-    setProcessedEntry(partyRoomCode, meta.championId, entry.setAt)
-    partyProcessedRef.current[meta.championId] = entry.setAt
-    if (entry.setBy === getDeviceId()) {
-      removeActiveSkin(partyRoomCode, meta.championId)
-    }
+    removeActiveSkin(partyRoomCode, meta.championId)
   }
 
   const handleRemove = async (meta: SkinMeta) => {
     if (!window.electronAPI) return
+    const blocked = getPartyBlock(meta)
+    if (blocked) {
+      addToast('warning', `"${meta.name}" arkadaşın tarafından aktive edildi, sadece o silebilir`)
+      return
+    }
     setRemovingIds((prev) => setAdd(prev, meta.id))
     const res = await window.electronAPI.removeSkin({ skinId: meta.id })
     setRemovingIds((prev) => setRemove(prev, meta.id))
@@ -1229,31 +1266,22 @@ const handleRandomSkin = async () => {
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4">
-          {filtered.map((c) => (
+          {filtered.map((c) => {
+            const pos =
+              c.id === 'KhaZix' ? '95% center' : c.id === 'MonkeyKing' ? '80% center' : CHAMPION_POSITIONS[c.id] || 'center'
+            return (
             <button
               key={c.id}
               onClick={() => selectChampion(c)}
-              className="group bg-white/[0.03] border border-white/[0.06] rounded-xl overflow-hidden hover:border-sky-500/50 hover:shadow-lg hover:shadow-sky-500/10 transition-shadow"
+              className="group relative bg-white/[0.03] border border-white/[0.07] rounded-xl overflow-hidden transition-all duration-300 ease-out hover:-translate-y-1 hover:border-sky-400/70 hover:shadow-[0_8px_24px_-4px_rgba(56,189,248,0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
             >
+              <div className="pointer-events-none absolute inset-0 z-10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 ring-1 ring-inset ring-sky-300/40"></div>
               <div className="aspect-[3/4] relative overflow-hidden">
   <img
     src={`./champions/${c.id === 'KhaZix' ? 'khazix' : c.id === 'MonkeyKing' ? 'wukong' : getChampionImageFilename(c.id)}.jpg`}
     alt={c.name}
-    className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-    style={{
-      objectPosition: (() => {
-        if (c.id === 'KhaZix') return '95% center';
-        if (c.id === 'MonkeyKing') return '80% center';
-        return CHAMPION_POSITIONS[c.id] || 'center';
-      })()
-    }}
-    onLoad={() => {
-      console.log(`Görsel yüklendi: ${c.id} -> pozisyon: ${(() => {
-        if (c.id === 'KhaZix') return '95% center';
-        if (c.id === 'MonkeyKing') return '80% center';
-        return CHAMPION_POSITIONS[c.id] || 'center';
-      })()}`);
-    }}
+    className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.12]"
+    style={{ objectPosition: pos, transformOrigin: pos }}
     loading="lazy"
     onError={(e) => {
       console.error(`Görsel yüklenemedi: ${c.id} -> ${getChampionImageFilename(c.id)}.jpg`);
@@ -1265,7 +1293,8 @@ const handleRandomSkin = async () => {
   </div>
 </div>
             </button>
-          ))}
+            )
+          })}
         </div>
       )
     }
