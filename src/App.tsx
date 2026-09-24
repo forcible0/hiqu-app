@@ -452,22 +452,13 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
       return
     }
 
-    let blockedCount = 0
     for (const meta of downloadedMetas) {
-      const blocked = getPartyBlock(meta)
-      if (blocked) {
-        blockedCount++
-        continue
-      }
       const res = await window.electronAPI.removeSkin({ skinId: meta.id })
       if (!res.success) {
         addToast('error', `"${meta.name}" silinemedi: ${res.error || 'Bilinmeyen hata'}`)
       } else {
         maybeBroadcastRemoval(meta)
       }
-    }
-    if (blockedCount > 0) {
-      addToast('warning', `${blockedCount} skin arkadaşın tarafından aktive edildiği için atlandı`)
     }
     addToast('success', 'İndirilenler silindi')
     refreshDownloaded()
@@ -480,15 +471,9 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
       return
     }
 
-    let blockedCount = 0
     for (const id of selectedIds) {
       const meta = downloadedMetas.find((m) => m.id === id)
       if (meta) {
-        const blocked = getPartyBlock(meta)
-        if (blocked) {
-          blockedCount++
-          continue
-        }
         const res = await window.electronAPI.removeSkin({ skinId: id })
         if (!res.success) {
           addToast('error', `"${meta.name}" silinemedi: ${res.error || 'Bilinmeyen hata'}`)
@@ -496,9 +481,6 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
           maybeBroadcastRemoval(meta)
         }
       }
-    }
-    if (blockedCount > 0) {
-      addToast('warning', `${blockedCount} skin arkadaşın tarafından aktive edildiği için atlandı`)
     }
     addToast('success', 'Seçilenler silindi')
     setSelectedIds(new Set())
@@ -560,6 +542,10 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
   // hâlâ benim partiye gönderdiğim güncel kayıt mı?" kontrolü için senkron
   // olarak buradan okunur (React state'i beklemeye gerek kalmadan).
   const partyActiveEntriesRef = useRef<Record<string, PartySkinEntry>>({})
+  // Az önce KENDİ cihazımızın Firebase'den kaldırdığı championId'leri geçici
+  // tutar — silme dinleyicisi bu event kendimize geri yansıdığında (biz zaten
+  // yerelde silmişken) tekrar işlemesin diye.
+  const recentlySelfRemovedRef = useRef<Set<string>>(new Set())
   const activeSetRef = useRef(activeSet)
   const downloadedIdsRef = useRef(downloadedIds)
   const championsRef = useRef(champions)
@@ -660,20 +646,23 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
     }
   }, [partyRoomCode])
 
-  // Bir parti üyesi kendi aktive ettiği skini Firebase'den kaldırdığında
-  // (bkz. handleRemove) burada yakalanır ve bizim tarafımızda da kaldırılır.
-  // onChildRemoved eski (silinmiş) kayıtları tekrar oynatmadığı için burada
-  // "aktivasyon" dinleyicisindeki restart/replay riski yok, ekstra bir
-  // kalıcı-kayıt takibine gerek kalmıyor.
+  // Herhangi bir parti üyesi (kim aktive etmiş olursa olsun) bir skini
+  // Firebase'den kaldırdığında (bkz. maybeBroadcastRemoval) burada yakalanır
+  // ve bizim tarafımızda da kaldırılır. recentlySelfRemovedRef, BİZİM az önce
+  // tetiklediğimiz silmeyi (kendi cihazımıza geri yansıyan olayı) tekrar
+  // işlememek için kullanılıyor — "kim aktive etti" değil "bu silmeyi ben mi
+  // başlattım" sorusuna bakıyoruz, çünkü artık herkes herkesinkini silebiliyor.
   useEffect(() => {
     if (!partyRoomCode) return
-    const myDeviceId = getDeviceId()
-    const unsubscribe = listenToRemovedSkins(partyRoomCode, async (_championId, entry) => {
-      if (entry.setBy === myDeviceId) return // kendi sildiğimizi tekrar işlemeyelim
+    const unsubscribe = listenToRemovedSkins(partyRoomCode, async (championId, entry) => {
+      if (recentlySelfRemovedRef.current.has(championId)) {
+        recentlySelfRemovedRef.current.delete(championId)
+        return
+      }
       const targetId = entry.chromaId || entry.skinId
       if (!downloadedIdsRef.current.has(targetId)) return // zaten bizde yoksa yapacak bir şey yok
       try {
-        addToast('info', `Parti: "${entry.name}" arkadaşın tarafından kaldırıldı, senden de kaldırılıyor...`)
+        addToast('info', `Parti: "${entry.name}" bir üye tarafından kaldırıldı, senden de kaldırılıyor...`)
         await window.electronAPI?.removeSkin({ skinId: targetId })
         downloadedIdsRef.current = new Set(
           [...downloadedIdsRef.current].filter((id) => id !== targetId)
@@ -954,11 +943,6 @@ const handleRandomSkin = async () => {
 
   const handleDeactivate = async (meta: SkinMeta) => {
     if (!window.electronAPI) return
-    const blocked = getPartyBlock(meta)
-    if (blocked) {
-      addToast('warning', `"${meta.name}" arkadaşın tarafından aktive edildi, sadece o pasifleştirebilir`)
-      return
-    }
     const res = await window.electronAPI.deactivateSkin({ skinId: meta.id })
     if (!res.success) {
       addToast('error', res.error || 'Skin pasifleştirilemedi')
@@ -970,42 +954,23 @@ const handleRandomSkin = async () => {
 
   // --- Kaldırma ---
 
-  // Parti'deyken bir şampiyonun skinini SADECE onu aktive eden kişi
-  // silebilir/pasifleştirebilir; başkasının skinine dokunulmaya çalışılırsa
-  // bu, o kaydı (ve dolayısıyla arkadaşının bilgisayarındaki dosyayı) döner —
-  // partiden ayrılınca (partyRoomCode boşalınca) kısıtlama kendiliğinden
-  // kalkar, herkes yine kendi indirdiği/aktifleştirdiği gibi normal şekilde
-  // yönetebilir.
-  const getPartyBlock = (meta: SkinMeta): PartySkinEntry | null => {
-    if (!partyRoomCode || !meta.championId) return null
-    const entry = partyActiveEntriesRef.current[meta.championId]
-    if (!entry) return null
-    const entryTargetId = entry.chromaId || entry.skinId
-    if (entryTargetId !== meta.id) return null
-    if (entry.setBy === getDeviceId()) return null
-    return entry
-  }
-
-  // Skin partide hâlâ BENİM (bu cihazın) o şampiyon için gönderdiğim güncel
-  // kayıtsa, Firebase'deki kaydı da sil — böylece arkadaşımın bilgisayarından
-  // da otomatik kaldırılır. Başkasının skinini silme zaten getPartyBlock ile
-  // engellendiği için buraya her zaman "benim" bir kayıt gelir.
+  // Silinen skin partide hâlâ (kim aktive etmiş olursa olsun) o şampiyon için
+  // güncel kayıtsa, Firebase'deki kaydı da sil — böylece parti üyesinin
+  // bilgisayarından da otomatik kaldırılır. recentlySelfRemovedRef'e ekleyip
+  // silme dinleyicisinin bu olayı kendimize geri geldiğinde tekrar işlemesini
+  // (zaten yerelde sildiğimiz için) engelliyoruz.
   const maybeBroadcastRemoval = (meta: SkinMeta) => {
     if (!partyRoomCode || !meta.championId) return
     const entry = partyActiveEntriesRef.current[meta.championId]
     if (!entry) return
     const entryTargetId = entry.chromaId || entry.skinId
     if (entryTargetId !== meta.id) return
+    recentlySelfRemovedRef.current.add(meta.championId)
     removeActiveSkin(partyRoomCode, meta.championId)
   }
 
   const handleRemove = async (meta: SkinMeta) => {
     if (!window.electronAPI) return
-    const blocked = getPartyBlock(meta)
-    if (blocked) {
-      addToast('warning', `"${meta.name}" arkadaşın tarafından aktive edildi, sadece o silebilir`)
-      return
-    }
     setRemovingIds((prev) => setAdd(prev, meta.id))
     const res = await window.electronAPI.removeSkin({ skinId: meta.id })
     setRemovingIds((prev) => setRemove(prev, meta.id))
