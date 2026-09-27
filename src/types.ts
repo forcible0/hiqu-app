@@ -36,6 +36,7 @@ export interface SkinMeta {
   championKey: string;  // Sayısal ID (LoLskins indirme URL'si için)
   championName: string;
   downloadedAt?: number;
+  isCustom?: boolean;   // Kullanıcının kendi eklediği özel skin — DDragon'dan splash görseli çekilmez
 }
 
 export type TabKey = 'champions' | 'favorites' | 'downloaded';

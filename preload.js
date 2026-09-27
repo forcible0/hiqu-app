@@ -25,6 +25,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onRemoveStatus: (callback) => ipcRenderer.on('remove-status', callback),
   onSkinDownloadProgress: (callback) => ipcRenderer.on('skin-download-progress', callback),
 
+  // Özel (custom) skin içe aktarma
+  importCustomSkin: () => ipcRenderer.invoke('import-custom-skin'),
+  saveCustomSkinMeta: (params) => ipcRenderer.invoke('save-custom-skin-meta', params),
+
   // Çoklu skin aktivasyonu (tek patcher + birleşik overlay)
   applySkins: (params) => ipcRenderer.invoke('apply-skins', params),
   deactivateSkin: (params) => ipcRenderer.invoke('deactivate-skin', params),

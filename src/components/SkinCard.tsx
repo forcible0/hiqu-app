@@ -34,7 +34,9 @@ export default function SkinCard({
   onToggleQueue,
   onDownload
 }: SkinCardProps) {
-  const imageUrl = getSkinImageUrl(meta.num, meta.championId)
+  // Özel (custom) skinler için DDragon'da gerçek bir splash yok — görsel
+  // çekmeye çalışmak yanlış (varsayılan skin görselini) gösterirdi.
+  const imageUrl = meta.isCustom ? '' : getSkinImageUrl(meta.num, meta.championId)
 
   return (
     <div
@@ -101,6 +103,11 @@ export default function SkinCard({
 
         {/* Durum rozetleri (sağ üst) */}
         <div className="absolute top-2 right-2 flex flex-col items-end gap-1 pointer-events-none">
+          {meta.isCustom && (
+            <span className="bg-purple-500/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg shadow-purple-500/30">
+              ÖZEL
+            </span>
+          )}
           {isDownloading && (
             <span className="bg-sky-600/90 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg shadow-sky-500/30 animate-pulse">
               İNDİRİLİYOR...

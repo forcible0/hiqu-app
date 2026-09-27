@@ -57,7 +57,7 @@ export default function SkinModal({
   onSelectChroma
 }: SkinModalProps) {
   const isDownloading = downloadProgress !== undefined
-  const imageUrl = getSkinImageUrl(meta.num, meta.championId)
+  const imageUrl = meta.isCustom ? '' : getSkinImageUrl(meta.num, meta.championId)
   const modalRef = useRef<HTMLDivElement>(null)
 const [modalHeight, setModalHeight] = useState<number>()
 
@@ -124,6 +124,11 @@ useEffect(() => {
               </p>
             </div>
             <div className="shrink-0 flex flex-col items-end gap-1.5">
+              {meta.isCustom && (
+                <span className="bg-purple-500/90 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg shadow-purple-500/30">
+                  ÖZEL
+                </span>
+              )}
               {isActive && (
                 <span className="flex items-center gap-1.5 bg-green-500/90 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg shadow-green-500/30">
                   <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse"></span>

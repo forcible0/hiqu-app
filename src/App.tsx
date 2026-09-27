@@ -8,7 +8,7 @@ import QueueBar from './components/QueueBar'
 import Toasts from './components/Toasts'
 import PartyModal from './components/PartyModal'
 import { getDeviceId, getSavedRoomCode, createRoom, joinRoom, leaveRoom, listenToMembers, listenToRoomSkins, listenToRemovedSkins, broadcastActiveSkin, removeActiveSkin, getProcessedMap, setProcessedEntry, PartyMember, PartySkinEntry } from './party'
-import { Check, Square, Trash2, ArrowLeft, Palette, Heart, Package, Dices, Wand2, Search, type LucideIcon } from 'lucide-react'
+import { Check, Square, Trash2, ArrowLeft, Palette, Heart, Package, Dices, Wand2, Search, FolderPlus, type LucideIcon } from 'lucide-react'
 
 
 const FAVORITES_KEY = 'buck_favorites'
@@ -871,6 +871,51 @@ const handleRandomSkin = async () => {
     }
   }
   
+  // --- Özel (custom) skin içe aktarma ---
+  // Kullanıcının kendi .fantome/.zip dosyasını seçip WAD içeriğinden şampiyonu
+  // otomatik tespit eder, champions listesiyle eşleştirir ve meta'yı kaydeder.
+  // Not: Parti Modu'nda özel skinler diğer üyelere otomatik gitmez — onlar
+  // LoLskins deposundan indirilebilen skinlerle sınırlı, senin diskindeki
+  // özel dosyayı arkadaşının indirmesinin bir yolu yok.
+  const handleImportCustomSkin = async () => {
+    if (!window.electronAPI) return
+    const res = await window.electronAPI.importCustomSkin()
+    if (res.canceled) return
+    if (!res.success) {
+      addToast('error', res.error || 'Skin dosyası içe aktarılamadı')
+      return
+    }
+    const detected = res.detectedChampions[0]
+    const champion = champions.find((c) => c.id.toLowerCase() === detected.toLowerCase())
+    if (!champion) {
+      addToast('error', `"${detected}" isimli bir şampiyon bulunamadı, dosya iptal ediliyor`)
+      await window.electronAPI.removeSkin({ skinId: res.customId })
+      return
+    }
+    if (res.detectedChampions.length > 1) {
+      addToast(
+        'warning',
+        `Dosyada birden fazla şampiyon tespit edildi (${res.detectedChampions.join(', ')}) — ${champion.name} kullanılacak`
+      )
+    }
+    const saveRes = await window.electronAPI.saveCustomSkinMeta({
+      customId: res.customId,
+      meta: {
+        name: res.fileName || `${champion.name} (Özel)`,
+        championId: champion.id,
+        championKey: champion.key,
+        championName: champion.name
+      }
+    })
+    if (!saveRes.success) {
+      addToast('error', saveRes.error || 'Skin kaydedilemedi')
+      await window.electronAPI.removeSkin({ skinId: res.customId })
+      return
+    }
+    addToast('success', `"${champion.name}" için özel skin eklendi`)
+    refreshDownloaded()
+  }
+
   const handleDownloadChroma = async (baseMeta: SkinMeta, chroma: Chroma) => {
   if (!window.electronAPI) return
   if (downloading.has(chroma.id) || downloadedIds.has(chroma.id)) return
@@ -1345,6 +1390,14 @@ const handleRandomSkin = async () => {
               <span className="text-xs text-gray-500 bg-white/[0.05] border border-white/[0.08] rounded-full px-2 py-0.5">
                 {championSkins.length} skin
               </span>
+            )}
+            {tab === 'downloaded' && (
+              <button
+                onClick={handleImportCustomSkin}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-gray-300 hover:bg-sky-500/15 hover:border-sky-500/30 hover:text-sky-300 transition"
+              >
+                <FolderPlus className="w-3.5 h-3.5" strokeWidth={2} /> Özel Skin Ekle
+              </button>
             )}
             <div className="ml-auto w-64 relative">
               <Search className="w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" strokeWidth={2} />

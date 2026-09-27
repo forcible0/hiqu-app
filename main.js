@@ -725,6 +725,89 @@ ipcMain.handle('download-chroma', async (_event, { championKey, skinId, chromaId
   }
 })
 
+// Kullanıcının kendi .fantome/.zip dosyasını seçip içe aktarması. Sadece
+// dosyayı açıp WAD/ klasöründeki *.wad.client isimlerinden hangi
+// şampiyon(lar)a ait olduğunu tespit eder ve SKINS_DIR'a kopyalar — meta
+// bilgisi (isim, şampiyon eşleşmesi) renderer'ın 'save-custom-skin-meta'
+// çağrısıyla ayrıca kaydedilir (renderer champions listesiyle eşleştirme
+// yapabildiği için bu adım orada).
+ipcMain.handle('import-custom-skin', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: 'Özel skin dosyası seçin (.fantome / .zip)',
+    filters: [{ name: 'Skin Dosyası', extensions: ['fantome', 'zip'] }],
+    properties: ['openFile']
+  })
+  if (result.canceled || !result.filePaths[0]) {
+    return { success: false, canceled: true }
+  }
+  const srcPath = result.filePaths[0]
+  const fileName = path.basename(srcPath, path.extname(srcPath))
+
+  const sevenZip = require('7zip-bin')
+  const { execFileSync } = require('child_process')
+  const tmpExtractDir = path.join(app.getPath('userData'), 'custom_import_tmp')
+  fs.rmSync(tmpExtractDir, { recursive: true, force: true })
+  fs.mkdirSync(tmpExtractDir, { recursive: true })
+
+  try {
+    execFileSync(sevenZip.path7za, ['x', '-y', `-o${tmpExtractDir}`, srcPath], { windowsHide: true })
+  } catch (err) {
+    fs.rmSync(tmpExtractDir, { recursive: true, force: true })
+    return { success: false, error: 'Dosya açılamadı — geçerli bir .fantome/.zip değil: ' + err.message }
+  }
+
+  const wadDir = path.join(tmpExtractDir, 'WAD')
+  if (!fs.existsSync(wadDir)) {
+    fs.rmSync(tmpExtractDir, { recursive: true, force: true })
+    return { success: false, error: 'Dosya içinde bir WAD klasörü bulunamadı — geçerli bir skin modu değil' }
+  }
+  const champFiles = fs.readdirSync(wadDir).filter((f) => /\.wad\.client$/i.test(f))
+  fs.rmSync(tmpExtractDir, { recursive: true, force: true })
+
+  if (champFiles.length === 0) {
+    return { success: false, error: "WAD klasöründe bir şampiyon wad'ı bulunamadı" }
+  }
+  const detectedChampions = [...new Set(champFiles.map((f) => f.replace(/\.wad\.client$/i, '')))]
+
+  // Gerçek Riot skin/chroma ID'leriyle asla çakışmasın diye 9 ile başlayan,
+  // zaman damgası tabanlı, sadece rakamlardan oluşan bir ID üretiyoruz —
+  // isValidId (sadece \d+) bunu değişiklik yapmadan kabul eder.
+  const customId = '9' + Date.now().toString() + Math.floor(100 + Math.random() * 900).toString()
+  const dest = path.join(SKINS_DIR, `${customId}.fantome`)
+  try {
+    fs.mkdirSync(SKINS_DIR, { recursive: true })
+    fs.copyFileSync(srcPath, dest)
+  } catch (err) {
+    return { success: false, error: 'Dosya kopyalanamadı: ' + err.message }
+  }
+
+  return { success: true, customId, detectedChampions, fileName }
+})
+
+// Şampiyon eşleşmesi renderer'da yapıldıktan sonra meta bilgisini kaydeder.
+ipcMain.handle('save-custom-skin-meta', (_event, { customId, meta }) => {
+  if (!isValidId(customId)) {
+    return { success: false, error: 'Geçersiz ID' }
+  }
+  const filePath = path.join(SKINS_DIR, `${customId}.fantome`)
+  if (!fs.existsSync(filePath)) {
+    return { success: false, error: 'Skin dosyası bulunamadı — önce import-custom-skin çağrılmalı' }
+  }
+  const all = readSkinsMeta()
+  all[customId] = {
+    id: customId,
+    name: (meta && meta.name) || 'Özel Skin',
+    num: 0,
+    championId: (meta && meta.championId) || '',
+    championKey: (meta && meta.championKey) || '',
+    championName: (meta && meta.championName) || '',
+    isCustom: true,
+    downloadedAt: Date.now()
+  }
+  writeSkinsMeta(all)
+  return { success: true }
+})
+
 // Skin kaldırma: yerel .fantome dosyasını sil + aktif listeden düş +
 // overlay'i kalan skinlerle güncelle (diğer aktif skinler çalışmaya devam eder)
 ipcMain.handle('remove-skin', (_event, { skinId }) => {
