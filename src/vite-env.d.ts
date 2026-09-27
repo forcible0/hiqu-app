@@ -19,8 +19,26 @@ interface ApplySkinsResultDto {
 }
 
 interface ElectronAPI {
-  importCustomSkin(): unknown;
-  saveCustomSkinMeta(arg0: { customId: any; meta: { name: any; championId: string; championKey: string | undefined; championName: string; }; }): unknown;
+  importCustomSkin: () => Promise<{
+    canceled: boolean;
+    success?: boolean;
+    error?: string;
+    detectedChampions: string[];
+    customId: string;
+    fileName?: string;
+  }>;
+  saveCustomSkinMeta: (params: {
+    customId: string;
+    meta: {
+      name: string;
+      championId: string;
+      championKey?: string;
+      championName: string;
+    };
+  }) => Promise<{
+    success: boolean;
+    error?: string;
+  }>;
   checkForUpdates: () => Promise<{ success: boolean; message?: string; error?: string }>;
   getAppVersion: () => Promise<string>;
   onUpdateAvailable: (callback: (event: any, info: any) => void) => void;
