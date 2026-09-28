@@ -585,6 +585,11 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
 
         partyProcessedRef.current[entry.championId] = entry.setAt
         setProcessedEntry(partyRoomCode, entry.championId, entry.setAt)
+        if (entry.isCustom) {
+          // Özel skin sadece gönderenin diskinde var, depodan indirilemez
+          addToast('info', `Parti: "${entry.name}" özel bir skin — sadece gönderenin bilgisayarında olduğu için senin tarafında uygulanamaz`)
+          return
+        }
         partyProcessingRef.current.add(targetId)
 
         try {
@@ -599,15 +604,22 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
             championName: entry.championName
           }
           if (!downloadedIdsRef.current.has(targetId)) {
+            let dl
             if (entry.chromaId) {
-              await window.electronAPI?.downloadChroma({
+              dl = await window.electronAPI?.downloadChroma({
                 championKey,
                 skinId: entry.skinId,
                 chromaId: entry.chromaId,
                 meta: partyMeta
               })
             } else {
-              await window.electronAPI?.downloadSkin({ championKey, skinId: entry.skinId, meta: partyMeta })
+              dl = await window.electronAPI?.downloadSkin({ championKey, skinId: entry.skinId, meta: partyMeta })
+            }
+            // İndirme başarısızsa (ör. depoda olmayan bir skin) "indirildi" sayıp
+            // uygulamaya çalışma — aksi halde yanıltıcı hatalar üretir.
+            if (!dl || !dl.success) {
+              addToast('warning', `Parti: "${entry.name}" indirilemedi${dl?.error ? ` (${dl.error})` : ''}, uygulanmadı`)
+              return
             }
             downloadedIdsRef.current = new Set(downloadedIdsRef.current).add(targetId)
             refreshDownloaded()
@@ -975,6 +987,7 @@ const handleRandomSkin = async () => {
       broadcastActiveSkin(partyRoomCode, {
         skinId: chromaOf || meta.id,
         ...(chromaOf ? { chromaId: meta.id } : {}),
+        ...(meta.isCustom ? { isCustom: true } : {}),
         name: meta.name,
         championId: meta.championId,
         championName: meta.championName,

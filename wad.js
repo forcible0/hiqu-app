@@ -47,7 +47,12 @@ function parseWad(buf) {
 }
 
 // BASE_WAD_PLACEHOLDER
-function mergeWads(baseBuf, modBuf, outPath) {
+// options.addNew = false → mod'un oyunda OLMAYAN chunk'ları eklenmez, yalnızca
+// oyunda zaten var olan hash'ler geçersiz kılınır. Cross-wad dağıtımında
+// (Common/Global/harita wad'ları) bu şart: aksi halde büyük bir modun tüm
+// içeriği paylaşılan büyük wad'ların içine de kopyalanır.
+function mergeWads(baseBuf, modBuf, outPath, options = {}) {
+  const addNew = options.addNew !== false
   const base = parseWad(baseBuf)
   const mod = parseWad(modBuf)
 
@@ -82,7 +87,9 @@ function mergeWads(baseBuf, modBuf, outPath) {
     }
   }
   // 2) Mod'un kendi eklediği ve oyunda olmayan chunk'lar
-  for (const e of modByHash.values()) addEntry(e, mod.buf)
+  if (addNew) {
+    for (const e of modByHash.values()) addEntry(e, mod.buf)
+  }
 
   // Çıktı düzeni: header (272B, base'in imzası/checksum'ı korunur) + TOC + chunk verisi.
   // League chunk tablosunun path_hash sıralı olmasını zorunlu tutar.
@@ -97,6 +104,10 @@ function mergeWads(baseBuf, modBuf, outPath) {
   for (const e of outEntries) {
     e.dataOffset = dataStart + pos
     pos += e.data.length
+  }
+  // WAD'da dataOffset 32-bit — 4 GiB'ı aşarsa offset'ler taşar ve dosya bozulur
+  if (dataStart + pos > 0xffffffff) {
+    throw new Error('Birleştirilmiş WAD 4 GB sınırını aşıyor (mod çok büyük olabilir)')
   }
 
   const header = Buffer.alloc(headerLen)
@@ -122,4 +133,28 @@ function mergeWads(baseBuf, modBuf, outPath) {
   return { entryCount: outEntries.length, overriddenChunks: mod.entries.length - modByHash.size }
 }
 
-module.exports = { parseWad, mergeWads }
+// Sadece header + TOC okuyup chunk hash'lerini döner (veri kısmını okumaz).
+// Cross-wad indeksleme için kullanılır — Map11/Common/Global gibi büyük
+// (yüzlerce MB) wad'ların tamamını hafızaya almadan hangi hash'leri
+// içerdiklerini öğrenmemizi sağlar.
+function readWadHashes(filePath) {
+  const fd = fs.openSync(filePath, 'r')
+  try {
+    const headerBuf = Buffer.alloc(272)
+    fs.readSync(fd, headerBuf, 0, 272, 0)
+    if (headerBuf.readUInt16LE(0) !== WAD_MAGIC) return []
+    const entryCount = headerBuf.readUInt32LE(268)
+    const tocLen = entryCount * TOC_ENTRY_SIZE
+    const tocBuf = Buffer.alloc(tocLen)
+    fs.readSync(fd, tocBuf, 0, tocLen, 272)
+    const hashes = []
+    for (let i = 0; i < entryCount; i++) {
+      hashes.push(tocBuf.readBigUInt64LE(i * TOC_ENTRY_SIZE))
+    }
+    return hashes
+  } finally {
+    fs.closeSync(fd)
+  }
+}
+
+module.exports = { parseWad, mergeWads, readWadHashes }

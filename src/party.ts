@@ -10,6 +10,7 @@ export interface PartyMember {
 export interface PartySkinEntry {
   skinId: string
   chromaId?: string
+  isCustom?: boolean
   name: string
   championId: string
   championName: string

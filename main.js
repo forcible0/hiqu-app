@@ -516,7 +516,9 @@ function rebuildOverlay(skinIds, gameDir) {
       // onun üzerine devam et (overlay'deki en güncel hali kullan)
       let otherBuf = fs.existsSync(otherOutPath) ? fs.readFileSync(otherOutPath) : fs.readFileSync(otherWadPath)
       for (const modFile of files) {
-        mergeWads(otherBuf, fs.readFileSync(modFile), otherOutPath)
+        // addNew:false → sadece bu wad'da zaten var olan hash'ler geçersiz kılınır;
+        // modun diğer (yeni) chunk'ları paylaşılan büyük wad'lara kopyalanmaz.
+        mergeWads(otherBuf, fs.readFileSync(modFile), otherOutPath, { addNew: false })
         otherBuf = fs.readFileSync(otherOutPath)
       }
       warnings.push(`"${name}" paylaşılan varlıkları güncellendi: ${otherDest}`)
