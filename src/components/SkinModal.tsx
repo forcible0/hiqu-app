@@ -57,7 +57,7 @@ export default function SkinModal({
   onSelectChroma
 }: SkinModalProps) {
   const isDownloading = downloadProgress !== undefined
-  const imageUrl = meta.isCustom ? '' : getSkinImageUrl(meta.num, meta.championId)
+  const imageUrl = getSkinImageUrl(meta.isCustom ? 0 : meta.num, meta.championId)
   const modalRef = useRef<HTMLDivElement>(null)
 const [modalHeight, setModalHeight] = useState<number>()
 

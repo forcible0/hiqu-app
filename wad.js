@@ -130,7 +130,57 @@ function mergeWads(baseBuf, modBuf, outPath, options = {}) {
   }
 
   fs.writeFileSync(outPath, Buffer.concat([header, toc, ...outEntries.map((e) => e.data)]))
-  return { entryCount: outEntries.length, overriddenChunks: mod.entries.length - modByHash.size }
+
+  // Tanı bilgisi: mod'un WAD sürümü ve sıkıştırma türü dağılımı (tail[0] alt 4 bit = tür)
+  const modTypes = {}
+  for (const e of mod.entries) {
+    const t = e.tail[0] & 0x0f
+    modTypes[t] = (modTypes[t] || 0) + 1
+  }
+  return {
+    entryCount: outEntries.length,
+    overriddenChunks: mod.entries.length - modByHash.size,
+    baseEntries: base.entries.length,
+    modEntries: mod.entries.length,
+    addedChunks: addNew ? modByHash.size : 0,
+    modVersion: `${mod.major}.${mod.minor}`,
+    baseVersion: `${base.major}.${base.minor}`,
+    modTypes,
+    outSize: dataStart + pos
+  }
+}
+
+// Yazılan WAD'ın yapısal bütünlüğünü kontrol eder (yalnızca header + TOC okunur):
+// hash'ler kesin artan sırada mı, her chunk dosya sınırları içinde mi, header'daki
+// chunk sayısı dosya boyutuyla tutarlı mı. Sorun listesi döner (boşsa sağlam).
+function verifyWadFile(filePath) {
+  const problems = []
+  const size = fs.statSync(filePath).size
+  const fd = fs.openSync(filePath, 'r')
+  try {
+    const headerBuf = Buffer.alloc(272)
+    fs.readSync(fd, headerBuf, 0, 272, 0)
+    if (headerBuf.readUInt16LE(0) !== WAD_MAGIC) return ['magic geçersiz']
+    const count = headerBuf.readUInt32LE(268)
+    const tocLen = count * TOC_ENTRY_SIZE
+    if (272 + tocLen > size) return ['TOC dosya sonunu aşıyor']
+    const tocBuf = Buffer.alloc(tocLen)
+    fs.readSync(fd, tocBuf, 0, tocLen, 272)
+    let prev = -1n
+    for (let i = 0; i < count; i++) {
+      const p = i * TOC_ENTRY_SIZE
+      const hash = tocBuf.readBigUInt64LE(p)
+      const off = tocBuf.readUInt32LE(p + 8)
+      const csize = tocBuf.readUInt32LE(p + 12)
+      if (hash <= prev) problems.push(`hash sırası bozuk (entry ${i})`)
+      if (off < 272 + tocLen || off + csize > size) problems.push(`chunk sınır dışı (entry ${i})`)
+      prev = hash
+      if (problems.length >= 5) break
+    }
+  } finally {
+    fs.closeSync(fd)
+  }
+  return problems
 }
 
 // Sadece header + TOC okuyup chunk hash'lerini döner (veri kısmını okumaz).
@@ -157,4 +207,4 @@ function readWadHashes(filePath) {
   }
 }
 
-module.exports = { parseWad, mergeWads, readWadHashes }
+module.exports = { parseWad, mergeWads, readWadHashes, verifyWadFile }

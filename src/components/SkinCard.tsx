@@ -34,9 +34,10 @@ export default function SkinCard({
   onToggleQueue,
   onDownload
 }: SkinCardProps) {
-  // Özel (custom) skinler için DDragon'da gerçek bir splash yok — görsel
-  // çekmeye çalışmak yanlış (varsayılan skin görselini) gösterirdi.
-  const imageUrl = meta.isCustom ? '' : getSkinImageUrl(meta.num, meta.championId)
+  // Özel (custom) skinler için DDragon'da gerçek bir splash yok — şampiyonun
+  // varsayılan görselini (skin 0) gösteriyoruz; ÖZEL rozeti bunun gerçek skin
+  // görseli olmadığını belli ediyor.
+  const imageUrl = getSkinImageUrl(meta.isCustom ? 0 : meta.num, meta.championId)
 
   return (
     <div

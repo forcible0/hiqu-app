@@ -4,7 +4,7 @@ const { spawn } = require('child_process')
 const https = require('https')
 const fs = require('fs')
 const path = require('path')
-const { mergeWads, parseWad, readWadHashes } = require('./wad.js')
+const { mergeWads, parseWad, readWadHashes, verifyWadFile } = require('./wad.js')
 
 let mainWindow = null
 
@@ -467,6 +467,14 @@ function rebuildOverlay(skinIds, gameDir) {
   }
 
   let mergedCount = 0
+  // Tanı logu: her rebuild'de baştan yazılır (%APPDATA%\hiqu\overlay-debug.log).
+  // Bir skin oyunu çökertiyorsa sebebini (WAD sürümü, sıkıştırma türü, boyut...) buradan okuyabiliriz.
+  const dbgLines = [`=== ${new Date().toISOString()} skins=[${skinIds.join(',')}] ===`]
+  const flushDbg = () => {
+    try {
+      fs.writeFileSync(path.join(app.getPath('userData'), 'overlay-debug.log'), dbgLines.join('\n') + '\n')
+    } catch {}
+  }
   // Cross-wad indeksi bu rebuild'de bir kez kurulur, tüm skin grupları için
   // paylaşılır (her seferinde yeniden taramak gereksiz).
   const crossWadIndex = buildCrossWadIndex(gameDir)
@@ -483,9 +491,21 @@ function rebuildOverlay(skinIds, gameDir) {
     // Zincirleme merge: her mod bir öncekinin çıktısının üzerine bindirilir
     let currentBuf = fs.readFileSync(gameWadPath)
     for (const modFile of files) {
-      mergeWads(currentBuf, fs.readFileSync(modFile), outPath)
+      const st = mergeWads(currentBuf, fs.readFileSync(modFile), outPath)
+      dbgLines.push(
+        `[${name}] mod=${path.basename(modFile)} modWAD=v${st.modVersion} baseWAD=v${st.baseVersion} ` +
+          `oyunChunk=${st.baseEntries} modChunk=${st.modEntries} override=${st.overriddenChunks} yeni=${st.addedChunks} ` +
+          `sıkıştırmaTürleri=${JSON.stringify(st.modTypes)} çıktıBoyut=${st.outSize}`
+      )
       currentBuf = fs.readFileSync(outPath)
     }
+    const problems = verifyWadFile(outPath)
+    if (problems.length > 0) {
+      dbgLines.push(`[${name}] BÜTÜNLÜK SORUNU: ${problems.join('; ')}`)
+      flushDbg()
+      throw new Error(`Birleştirilen wad bozuk (${name}): ${problems.join('; ')}`)
+    }
+    dbgLines.push(`[${name}] bütünlük kontrolü: OK`)
     mergedCount++
 
     // Cross-wad dağıtım: modun değiştirdiği hash'lerden herhangi biri
@@ -525,6 +545,8 @@ function rebuildOverlay(skinIds, gameDir) {
     }
   }
 
+  dbgLines.push(...warnings.map((w) => `UYARI: ${w}`))
+  flushDbg()
   if (mergedCount === 0) {
     throw new Error('Hiçbir wad birleştirilemedi. ' + warnings.join(' | '))
   }
