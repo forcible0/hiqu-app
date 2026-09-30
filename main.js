@@ -197,9 +197,9 @@ function createWindow() {
   // Önceki oturumda aktif bırakılan skinler varsa patcher'ı otomatik geri yükle
   mainWindow.webContents.on('did-finish-load', () => {
     if (activeSkins.size > 0 && !patcherProcess) {
-      setTimeout(() => {
+      setTimeout(async () => {
         try {
-          syncPatcher()
+          await syncPatcher()
         } catch (err) {
           console.error('Patcher geri yüklenemedi:', err.message)
         }
@@ -265,6 +265,9 @@ ipcMain.handle('save-settings', (_event, settings) => {
   const current = readSettings()
   const merged = { ...current, ...settings, activeSkins: [...activeSkins] }
   const ok = writeSettings(merged)
+  if (ok && settings && settings.gamePath && settings.gamePath !== current.gamePath) {
+    invalidateCrossWadIndexCache()
+  }
   return { success: ok, error: ok ? undefined : 'Ayarlar dosyaya yazılamadı' }
 })
 
@@ -363,7 +366,19 @@ function findGameWad(gameDir, wadName) {
 // (performans için tüm DATA/FINAL değil) yapıyoruz: yalnızca header+TOC
 // okunuyor (readWadHashes), veri kısmına hiç dokunulmuyor — yüzlerce MB'lık
 // bir harita wad'ı için bile bu birkaç milisaniye sürer.
+let _crossWadIndexCache = null
+let _crossWadIndexCacheDir = null
+
+// Önbelleği geçersiz kılar — oyun yolu ayarlardan değiştirildiğinde çağrılır.
+function invalidateCrossWadIndexCache() {
+  _crossWadIndexCache = null
+  _crossWadIndexCacheDir = null
+}
+
 function buildCrossWadIndex(gameDir) {
+  if (_crossWadIndexCache && _crossWadIndexCacheDir === gameDir) {
+    return _crossWadIndexCache
+  }
   const candidates = []
   const championsDir = path.join(gameDir, 'DATA', 'FINAL', 'Champions')
   if (fs.existsSync(championsDir)) {
@@ -398,6 +413,8 @@ function buildCrossWadIndex(gameDir) {
       set.add(wadPath)
     }
   }
+  _crossWadIndexCache = index
+  _crossWadIndexCacheDir = gameDir
   return index
 }
 
@@ -572,15 +589,19 @@ function spawnPatcher(overlayDir, settings, skinIds) {
   })
   patcherProcess = child
 
-    let stopped = false
+  let stopped = false
   const sendCmd = (cmd) => {
     if (stopped || !child.stdin.writable) return
-    try { child.stdin.write(cmd + '\n') } catch { /* süreç kapandıysa yoksay */ }
+    try { child.stdin.write(cmd + '\n') } catch {}
   }
+
+  // Windows yollarını C++ patcher_host için güvenli biçime çevir (düz slash)
+  const safeOverlayPath = overlayDir.replace(/\\/g, '/').replace(/\/+$/, '') + '/'
+
   const startupTimers = [
     setTimeout(() => sendCmd('config loglevel 4096'), 300),
     setTimeout(() => sendCmd('config flags 12'), 400),
-    setTimeout(() => sendCmd(`config prefix ${overlayDir.replace(/[\\/]+$/, '')}\\`), 500),
+    setTimeout(() => sendCmd(`config prefix ${safeOverlayPath}`), 500),
     setTimeout(() => sendCmd('start scan'), 700)
   ]
 
@@ -633,7 +654,7 @@ function spawnPatcher(overlayDir, settings, skinIds) {
 
 // Overlay'i aktif skinlerle yeniden kur + patcher'ı (tek süreç) yeniden başlat.
 // Aktif skin kalmadıysa patcher'ı durdurur ve overlay'i temizler.
-function syncPatcher() {
+async function syncPatcher() {
   const skinIds = [...activeSkins]
   stopPatcherProcess()
   const overlayDir = path.join(app.getPath('userData'), 'overlay')
@@ -654,8 +675,10 @@ function syncPatcher() {
 
   const { overlayDir: outDir, mergedCount, warnings } = rebuildOverlay(skinIds, check.gameDir)
 
-  // Pipe'ın eski süreç tarafından bırakılması için kısa bekleme
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500)
+  // Pipe'ın eski süreç tarafından bırakılması için kısa bekleme — main process'i
+  // 500ms boyunca tamamen dondurmamak için (önceki senkron Atomics.wait) artık
+  // gerçek/engellemeyen bir bekleme kullanılıyor.
+  await new Promise((resolve) => setTimeout(resolve, 500))
 
   spawnPatcher(outDir, check.settings, skinIds)
   persistActiveSkins()
@@ -834,7 +857,7 @@ ipcMain.handle('save-custom-skin-meta', (_event, { customId, meta }) => {
 
 // Skin kaldırma: yerel .fantome dosyasını sil + aktif listeden düş +
 // overlay'i kalan skinlerle güncelle (diğer aktif skinler çalışmaya devam eder)
-ipcMain.handle('remove-skin', (_event, { skinId }) => {
+ipcMain.handle('remove-skin', async (_event, { skinId }) => {
   if (!isValidId(skinId)) {
     return { success: false, error: 'Geçersiz skin ID' }
   }
@@ -860,7 +883,7 @@ ipcMain.handle('remove-skin', (_event, { skinId }) => {
   // Aktif bir skin kaldırıldıysa overlay'i kalan skinlerle yeniden kur
   if (wasActive) {
     try {
-      syncPatcher()
+      await syncPatcher()
     } catch (err) {
       persistActiveSkins()
       sendToRenderer('patch-status', { state: 'error', message: 'Overlay güncellenemedi: ' + err.message })
@@ -873,7 +896,7 @@ ipcMain.handle('remove-skin', (_event, { skinId }) => {
 
 // ÇOKLU AKTİVASYON: verilen tüm skinleri aktif kümesine ekler ve patcher'ı
 // birleşik overlay ile yeniden başlatır. Zaten aktif olanlar atlanır.
-ipcMain.handle('apply-skins', (_event, { skinIds }) => {
+ipcMain.handle('apply-skins', async (_event, { skinIds }) => {
   if (!Array.isArray(skinIds) || skinIds.length === 0) {
     return { success: false, error: 'Skin seçilmedi' }
   }
@@ -904,7 +927,7 @@ ipcMain.handle('apply-skins', (_event, { skinIds }) => {
     return { success: true, alreadyActive, missing, warnings: [] }
   }
   try {
-    const { warnings } = syncPatcher()
+    const { warnings } = await syncPatcher()
     return { success: true, alreadyActive, missing, warnings }
   } catch (err) {
     persistActiveSkins()
@@ -913,13 +936,13 @@ ipcMain.handle('apply-skins', (_event, { skinIds }) => {
 })
 
 // Tek skini aktif kümeden çıkar (diğer aktif skinler çalışmaya devam eder)
-ipcMain.handle('deactivate-skin', (_event, { skinId }) => {
+ipcMain.handle('deactivate-skin', async (_event, { skinId }) => {
   if (!isValidId(skinId) || !activeSkins.has(skinId)) {
     return { success: false, error: 'Skin zaten aktif değil' }
   }
   activeSkins.delete(skinId)
   try {
-    const { warnings } = syncPatcher()
+    const { warnings } = await syncPatcher()
     return { success: true, warnings }
   } catch (err) {
     persistActiveSkins()
