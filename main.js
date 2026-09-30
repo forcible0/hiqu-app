@@ -24,6 +24,119 @@ try {
 }
 
 const LEAGUE_SKINS_BASE = 'https://raw.githubusercontent.com/forcible0/LoLskins/main/skins'
+const LEAGUE_SKINS_RAW_BASE = 'https://raw.githubusercontent.com/forcible0/LoLskins/main'
+const REPO_TREE_API_URL = 'https://api.github.com/repos/forcible0/LoLskins/git/trees/main?recursive=1'
+const REPO_INDEX_FILE = path.join(app.getPath('userData'), 'repo-index.json')
+const REPO_INDEX_TTL = 1000 * 60 * 60 * 6 // 6 saat — bu süreden eskiyse arka planda tazelenir
+
+// ==================== DEPO İNDEKSİ ====================
+// LoLskins deposu her zaman "skins/<champKey>/<skinId>/<skinId>.fantome" düz yapısında değil;
+// bazı skinler (örn. çok formlu "Ölümsüz Efsane" tipi skinler) Riot'un resmi verisinde ayrı bir
+// skin ID'si olsa da, depoda bir "ana" skinin klasörü altına nested (iç içe) konmuş olabilir:
+//   skins/103/103085/103086/103086.fantome
+// Bu yüzden URL'i tahmin etmek yerine, GitHub'ın Trees API'siyle tüm depo ağacını tek seferde
+// çekip her ID'nin GERÇEK dosya yolunu bir haritada (id -> path) tutuyoruz.
+
+let repoIndex = null // Map<string, string>  id -> "skins/.../<id>.fantome"
+let repoIndexBuiltAt = 0
+let repoIndexPromise = null
+
+function fetchJson(url, redirectCount = 0) {
+  return new Promise((resolve, reject) => {
+    if (redirectCount > 5) return reject(new Error('Çok fazla yönlendirme'))
+    https
+      .get(url, { headers: { 'User-Agent': 'hiqu-app', Accept: 'application/vnd.github+json' } }, (res) => {
+        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume()
+          return resolve(fetchJson(res.headers.location, redirectCount + 1))
+        }
+        if (res.statusCode !== 200) {
+          res.resume()
+          return reject(new Error(`GitHub API hatası (HTTP ${res.statusCode})`))
+        }
+        let data = ''
+        res.on('data', (c) => (data += c))
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(data))
+          } catch (err) {
+            reject(err)
+          }
+        })
+      })
+      .on('error', reject)
+  })
+}
+
+function buildIndexFromTree(tree) {
+  const map = {}
+  for (const entry of tree) {
+    if (entry.type !== 'blob') continue
+    const m = entry.path.match(/\/(\d+)\.fantome$/i)
+    if (!m) continue
+    map[m[1]] = entry.path // örn: "skins/103/103085/103086/103086.fantome"
+  }
+  return map
+}
+
+function loadCachedIndexFromDisk() {
+  try {
+    const cached = JSON.parse(fs.readFileSync(REPO_INDEX_FILE, 'utf8'))
+    if (cached && cached.map) {
+      repoIndex = cached.map
+      repoIndexBuiltAt = cached.builtAt || 0
+    }
+  } catch {
+    /* önbellek yok veya bozuk, sorun değil */
+  }
+}
+
+// Depo indeksinin güncel olmasını garanti eder; gerekirse GitHub'dan tazeler.
+// force=true ile manuel yenileme (IPC'den) tetiklenebilir.
+async function ensureRepoIndex(force = false) {
+  if (!repoIndex) loadCachedIndexFromDisk()
+  const fresh = repoIndex && Date.now() - repoIndexBuiltAt < REPO_INDEX_TTL
+  if (fresh && !force) return repoIndex
+  if (repoIndexPromise) return repoIndexPromise
+
+  repoIndexPromise = (async () => {
+    try {
+      const data = await fetchJson(REPO_TREE_API_URL)
+      if (!data || !Array.isArray(data.tree)) throw new Error('Depo ağacı okunamadı')
+      const map = buildIndexFromTree(data.tree)
+      repoIndex = map
+      repoIndexBuiltAt = Date.now()
+      try {
+        fs.mkdirSync(path.dirname(REPO_INDEX_FILE), { recursive: true })
+        fs.writeFileSync(REPO_INDEX_FILE, JSON.stringify({ builtAt: repoIndexBuiltAt, map }))
+      } catch (err) {
+        console.error('Depo indeksi diske yazılamadı:', err.message)
+      }
+      return map
+    } catch (err) {
+      console.error('Depo indeksi GitHub\'dan çekilemedi, eski önbellek kullanılacak:', err.message)
+      if (!repoIndex) loadCachedIndexFromDisk()
+      if (!repoIndex) throw err
+      return repoIndex
+    } finally {
+      repoIndexPromise = null
+    }
+  })()
+
+  return repoIndexPromise
+}
+
+// Bir ID için gerçek indirme URL'ini indeksten çözer; indekste yoksa eski düz yola düşer.
+async function resolveSkinDownloadUrl(id, fallbackUrl) {
+  try {
+    const idx = await ensureRepoIndex()
+    const relPath = idx[id]
+    if (relPath) return `${LEAGUE_SKINS_RAW_BASE}/${relPath}`
+  } catch (err) {
+    console.error('Depo indeksi kullanılamadı, düz yola düşülüyor:', err.message)
+  }
+  return fallbackUrl
+}
 
 function isValidId(id) {
   return typeof id === 'string' && /^\d+$/.test(id) && id.length <= 20
@@ -508,7 +621,8 @@ ipcMain.handle('download-skin', async (_event, { championKey, skinId, meta }) =>
   if (!isValidId(championKey) || !isValidId(skinId)) {
     return { success: false, error: 'Geçersiz şampiyon veya skin ID' }
   }
-  const url = `${LEAGUE_SKINS_BASE}/${championKey}/${skinId}/${skinId}.fantome`
+  const flatUrl = `${LEAGUE_SKINS_BASE}/${championKey}/${skinId}/${skinId}.fantome`
+  const url = await resolveSkinDownloadUrl(skinId, flatUrl)
   const dest = path.join(SKINS_DIR, `${skinId}.fantome`)
   try {
     fs.mkdirSync(SKINS_DIR, { recursive: true })
@@ -539,7 +653,8 @@ ipcMain.handle('download-chroma', async (_event, { championKey, skinId, chromaId
   if (!isValidId(championKey) || !isValidId(skinId) || !isValidId(chromaId)) {
     return { success: false, error: 'Geçersiz şampiyon, skin veya chroma ID' }
   }
-  const url = `${LEAGUE_SKINS_BASE}/${championKey}/${skinId}/${chromaId}/${chromaId}.fantome`
+  const flatUrl = `${LEAGUE_SKINS_BASE}/${championKey}/${skinId}/${chromaId}/${chromaId}.fantome`
+  const url = await resolveSkinDownloadUrl(chromaId, flatUrl)
   const dest = path.join(SKINS_DIR, `${chromaId}.fantome`)
   try {
     fs.mkdirSync(SKINS_DIR, { recursive: true })
@@ -773,8 +888,20 @@ ipcMain.on('install-update', () => {
   }
 })
 
+ipcMain.handle('refresh-repo-index', async () => {
+  try {
+    await ensureRepoIndex(true)
+    return { success: true }
+  } catch (err) {
+    return { success: false, error: err.message }
+  }
+})
+
 app.whenReady().then(() => {
   createWindow()
+
+  // Depo indeksini arka planda önceden çek (fire-and-forget) — ilk indirme GitHub'ı beklemesin
+  ensureRepoIndex().catch((err) => console.error('Depo indeksi önceden çekilemedi:', err.message))
 
   if (app.isPackaged) {
     setTimeout(() => {
