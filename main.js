@@ -4,7 +4,7 @@ const { spawn } = require('child_process')
 const https = require('https')
 const fs = require('fs')
 const path = require('path')
-const { mergeWads, verifyWadFile } = require('./wad.js')
+const { mergeWads, verifyWadFile, parseSkinArchive } = require('./wad.js')
 
 let mainWindow = null
 
@@ -316,17 +316,17 @@ function rebuildOverlay(skinIds, gameDir) {
       warnings.push(`Fantome çıkarılamadı (${skinId}): ${err.message}`)
       continue
     }
-    const wadSrcDir = path.join(skinExtractDir, 'WAD')
-    if (!fs.existsSync(wadSrcDir)) {
-      warnings.push(`Fantome içinde WAD klasörü yok (${skinId})`)
-      continue
-    }
 
+    // Klasör bağımsız esnek tarama: Tüm çıkarılan dizin altındaki .wad.client dosyalarını bulur
     let found = 0
     const walk = (dir) => {
+      if (!fs.existsSync(dir)) return
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
         const full = path.join(dir, entry.name)
-        if (entry.isDirectory()) { walk(full); continue }
+        if (entry.isDirectory()) {
+          walk(full)
+          continue
+        }
         if (!entry.isFile()) continue
         if (!/\.wad\.client$/i.test(entry.name)) continue
         const key = entry.name.toLowerCase()
@@ -335,7 +335,8 @@ function rebuildOverlay(skinIds, gameDir) {
         found++
       }
     }
-    walk(wadSrcDir)
+    walk(skinExtractDir)
+
     if (found === 0) warnings.push(`Fantome dosyasında wad bulunamadı (${skinId})`)
   }
 
@@ -576,29 +577,50 @@ ipcMain.handle('import-custom-skin', async () => {
   }
   const srcPath = result.filePaths[0]
 
-  const sevenZip = require('7zip-bin')
-  const { execFileSync } = require('child_process')
-  const tmpExtractDir = path.join(app.getPath('userData'), 'custom_import_tmp')
-  fs.rmSync(tmpExtractDir, { recursive: true, force: true })
-  fs.mkdirSync(tmpExtractDir, { recursive: true })
-
+  let parsedData = null
   try {
-    execFileSync(sevenZip.path7za, ['x', '-y', `-o${tmpExtractDir}`, srcPath], { windowsHide: true })
+    const fileBuf = await fs.promises.readFile(srcPath)
+    parsedData = await parseSkinArchive(fileBuf)
   } catch (err) {
-    fs.rmSync(tmpExtractDir, { recursive: true, force: true })
-    return { success: false, error: 'Dosya açılamadı: ' + err.message }
+    console.warn('JSZip parser ayrıştıramadı, alternatif yönteme geçiliyor:', err.message)
   }
 
-  const wadDir = path.join(tmpExtractDir, 'WAD')
-  if (!fs.existsSync(wadDir)) {
+  const champFiles = []
+
+  if (parsedData && parsedData.wadFiles.length > 0) {
+    for (const w of parsedData.wadFiles) {
+      champFiles.push(w.fileName)
+    }
+  } else {
+    const sevenZip = require('7zip-bin')
+    const { execFileSync } = require('child_process')
+    const tmpExtractDir = path.join(app.getPath('userData'), 'custom_import_tmp')
     fs.rmSync(tmpExtractDir, { recursive: true, force: true })
-    return { success: false, error: 'Dosya içinde WAD klasörü bulunamadı' }
+    fs.mkdirSync(tmpExtractDir, { recursive: true })
+
+    try {
+      execFileSync(sevenZip.path7za, ['x', '-y', `-o${tmpExtractDir}`, srcPath], { windowsHide: true })
+      const findWads = (dir) => {
+        if (!fs.existsSync(dir)) return
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          const full = path.join(dir, entry.name)
+          if (entry.isDirectory()) {
+            findWads(full)
+          } else if (entry.isFile() && /\.wad\.client$/i.test(entry.name)) {
+            champFiles.push(entry.name)
+          }
+        }
+      }
+      findWads(tmpExtractDir)
+    } catch (err) {
+      console.error('7zip çıkarma hatası:', err.message)
+    } finally {
+      fs.rmSync(tmpExtractDir, { recursive: true, force: true })
+    }
   }
-  const champFiles = fs.readdirSync(wadDir).filter((f) => /\.wad\.client$/i.test(f))
-  fs.rmSync(tmpExtractDir, { recursive: true, force: true })
 
   if (champFiles.length === 0) {
-    return { success: false, error: "WAD klasöründe bir şampiyon wad'ı bulunamadı" }
+    return { success: false, error: "Dosyada geçerli bir şampiyon WAD dosyası bulunamadı" }
   }
   const detectedChampions = [...new Set(champFiles.map((f) => f.replace(/\.wad\.client$/i, '')))]
 
@@ -611,7 +633,28 @@ ipcMain.handle('import-custom-skin', async () => {
     return { success: false, error: 'Dosya kopyalanamadı: ' + err.message }
   }
 
-  return { success: true, customId, detectedChampions, fileName: path.basename(srcPath, path.extname(srcPath)) }
+  // Meta bilgisini otomatik kaydet
+  const allMeta = readSkinsMeta()
+  allMeta[customId] = {
+    id: customId,
+    name: (parsedData && parsedData.name) || path.basename(srcPath, path.extname(srcPath)),
+    num: 0,
+    championId: detectedChampions[0] || '',
+    championKey: detectedChampions[0] || '',
+    championName: detectedChampions[0] || '',
+    isCustom: true,
+    previewUrl: (parsedData && parsedData.previewDataUrl) || null,
+    downloadedAt: Date.now()
+  }
+  writeSkinsMeta(allMeta)
+
+  return {
+    success: true,
+    customId,
+    detectedChampions,
+    fileName: (parsedData && parsedData.name) || path.basename(srcPath, path.extname(srcPath)),
+    previewDataUrl: (parsedData && parsedData.previewDataUrl) || null
+  }
 })
 
 ipcMain.handle('save-custom-skin-meta', (_event, { customId, meta }) => {
@@ -619,13 +662,15 @@ ipcMain.handle('save-custom-skin-meta', (_event, { customId, meta }) => {
   const filePath = path.join(SKINS_DIR, `${customId}.fantome`)
   if (!fs.existsSync(filePath)) return { success: false, error: 'Skin dosyası bulunamadı' }
   const all = readSkinsMeta()
+  const current = all[customId] || {}
   all[customId] = {
+    ...current,
     id: customId,
-    name: (meta && meta.name) || 'Özel Skin',
+    name: (meta && meta.name) || current.name || 'Özel Skin',
     num: 0,
-    championId: (meta && meta.championId) || '',
-    championKey: (meta && meta.championKey) || '',
-    championName: (meta && meta.championName) || '',
+    championId: (meta && meta.championId) || current.championId || '',
+    championKey: (meta && meta.championKey) || current.championKey || '',
+    championName: (meta && meta.championName) || current.championName || '',
     isCustom: true,
     downloadedAt: Date.now()
   }

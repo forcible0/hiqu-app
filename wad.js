@@ -3,10 +3,80 @@
 // RAM kilitlenmesini ve 2 GB Buffer sınırını aşmak için dosyalar diskten 64 KB'lık parçalarla kopyalanır.
 
 const fs = require('fs')
+const JSZip = require('jszip')
 
 const WAD_MAGIC = 0x5752 // 'RW'
 const TOC_ENTRY_SIZE = 32
 const CHUNK_READ_BUF_SIZE = 64 * 1024 // 64 KB parçalı kopyalama tamponu
+
+// Fantome / ZIP arşivini esnek şekilde tarayan yardımcı fonksiyon
+async function parseSkinArchive(fileBuffer) {
+  const zip = await JSZip.loadAsync(fileBuffer)
+  const allPaths = Object.keys(zip.files)
+
+  // 1. Esnek WAD Arama (Klasör seviyesi ve büyük/küçük harf bağımsız)
+  const wadEntries = allPaths
+    .filter((filePath) => {
+      const entry = zip.files[filePath]
+      if (entry.dir) return false
+      const lower = filePath.toLowerCase()
+      return lower.endsWith('.wad.client') || lower.endsWith('.wad')
+    })
+    .map((zipPath) => ({
+      zipPath,
+      fileName: zipPath.split('/').pop()
+    }))
+
+  if (wadEntries.length === 0) {
+    throw new Error('Seçili skinler için WAD dosyası bulunamadı')
+  }
+
+  // 2. Esnek Meta (info.json) Arama
+  const infoJsonPath = allPaths.find((p) => p.toLowerCase().endsWith('info.json'))
+  let meta = {}
+
+  if (infoJsonPath) {
+    try {
+      const jsonText = await zip.files[infoJsonPath].async('string')
+      meta = JSON.parse(jsonText)
+    } catch (err) {
+      console.warn('info.json okunamadı:', err)
+    }
+  }
+
+  // 3. Esnek Önizleme Görseli Arama
+  const imagePath =
+    allPaths.find((p) => {
+      const entry = zip.files[p]
+      if (entry.dir) return false
+      const lower = p.toLowerCase()
+      return (
+        /\.(png|jpg|jpeg|webp)$/.test(lower) &&
+        (lower.includes('meta/') || lower.includes('preview') || lower.includes('icon') || lower.includes('image'))
+      )
+    }) || allPaths.find((p) => !zip.files[p].dir && /\.(png|jpg|jpeg|webp)$/i.test(p))
+
+  let previewDataUrl = null
+  if (imagePath) {
+    try {
+      const base64 = await zip.files[imagePath].async('base64')
+      const ext = imagePath.split('.').pop().toLowerCase()
+      const mime = ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : `image/${ext}`
+      previewDataUrl = `data:${mime};base64,${base64}`
+    } catch (err) {
+      console.warn('Görsel dönüştürülemedi:', err)
+    }
+  }
+
+  return {
+    name: meta.Name || meta.name || 'Bilinmeyen Skin',
+    version: meta.Version || meta.version || '1.0.0',
+    author: meta.Author || meta.author || 'Bilinmeyen Yazar',
+    wadFiles: wadEntries,
+    previewDataUrl,
+    zipInstance: zip
+  }
+}
 
 // Sadece Header + TOC kısmını okur (Tüm dosyayı RAM'e yüklemez)
 function parseWadHeaderAndToc(filePath) {
@@ -80,7 +150,7 @@ function mergeWads(basePath, modPath, outPath, options = {}) {
 
   const outEntries = []
 
-  // 1) Oyunun chunk'ları: Orijinal chunk verileri RAM'e kopyalanmaz, sadece disk konumu tutulur
+  // 1) Oyunun chunk'ları
   for (const e of base.entries) {
     const override = modByHash.get(e.hash)
     if (override) {
@@ -241,4 +311,4 @@ function readWadHashes(filePath) {
   }
 }
 
-module.exports = { parseWadHeaderAndToc, mergeWads, readWadHashes, verifyWadFile }
+module.exports = { parseSkinArchive, parseWadHeaderAndToc, mergeWads, readWadHashes, verifyWadFile }

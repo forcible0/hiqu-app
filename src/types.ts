@@ -37,6 +37,8 @@ export interface SkinMeta {
   championName: string;
   downloadedAt?: number;
   isCustom?: boolean;   // Kullanıcının kendi eklediği özel skin — DDragon'dan splash görseli çekilmez
+  previewDataUrl?: string
+  author?: string
 }
 
 export type TabKey = 'champions' | 'favorites' | 'downloaded';
