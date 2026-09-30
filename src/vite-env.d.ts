@@ -8,6 +8,9 @@ interface SkinMetaDto {
   championKey: string;
   championName: string;
   downloadedAt?: number;
+  isCustom?: boolean;
+  previewDataUrl?: string;
+  author?: string;
 }
 
 interface ApplySkinsResultDto {
@@ -30,10 +33,14 @@ interface ElectronAPI {
   saveCustomSkinMeta: (params: {
     customId: string;
     meta: {
+      id?: string;
       name: string;
       championId: string;
       championKey?: string;
       championName: string;
+      isCustom?: boolean;
+      previewDataUrl?: string;
+      author?: string;
     };
   }) => Promise<{
     success: boolean;
