@@ -17,7 +17,9 @@ const QUEUE_KEY = 'buck_queue'
 function loadJson<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key)
-    return raw ? (JSON.parse(raw) as T) : fallback
+    if (!raw) return fallback
+    const parsed = JSON.parse(raw)
+    return parsed && (Array.isArray(parsed) || typeof parsed === 'object') ? (parsed as T) : fallback
   } catch {
     return fallback
   }
@@ -25,6 +27,7 @@ function loadJson<T>(key: string, fallback: T): T {
 
 // Şampiyon ID'lerini dosya adlarına map etme fonksiyonu
 function getChampionImageFilename(championId: string): string {
+  if (!championId) return ''
   const mapping: Record<string, string> = {
     'Aatrox': 'aatrox',
     'Ahri': 'ahri',
@@ -204,7 +207,7 @@ function getChampionImageFilename(championId: string): string {
   return mapping[championId] || championId.toLowerCase().replace(/[^a-z]/g, '');
 }
 
-// League of Legends resmi sitesine göre tahmini pozisyon değerleri (kullanıcı geri bildirimlerine göre)
+// League of Legends resmi sitesine göre tahmini pozisyon değerleri
 const CHAMPION_POSITIONS: Record<string, string> = {
   'Aatrox': '75% center',
   'Ahri': '70% center',
@@ -406,11 +409,11 @@ export default function App() {
   // Modal
   const [modalMeta, setModalMeta] = useState<SkinMeta | null>(null)
   const [modalChromas, setModalChromas] = useState<Chroma[]>([])
-const [loadingChromas, setLoadingChromas] = useState(false)
-const [selectedChromaId, setSelectedChromaId] = useState<string | null>(null)
-const [showPartyModal, setShowPartyModal] = useState(false)
-const [partyRoomCode, setPartyRoomCode] = useState<string | null>(getSavedRoomCode())
-const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
+  const [loadingChromas, setLoadingChromas] = useState(false)
+  const [selectedChromaId, setSelectedChromaId] = useState<string | null>(null)
+  const [showPartyModal, setShowPartyModal] = useState(false)
+  const [partyRoomCode, setPartyRoomCode] = useState<string | null>(getSavedRoomCode())
+  const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
 
   // Ayarlar & güncelleme
   const [settings, setSettings] = useState<AppSettings>({})
@@ -501,9 +504,6 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
     return Promise.resolve()
   }
 
-// İlk yükleme: şampiyonlar, ayarlar, indirilenler, aktif skinler
-// İlk "indirilenler" yüklemesi bitene kadar parti'den gelen aktivasyonları işlemeye başlamıyoruz
-  // (yoksa disk henüz okunmadan "indirilmemiş" sanılıp zaten indirilmiş bir skin tekrar indirilmeye çalışılır)
   const initialDownloadedLoadedRef = useRef(false)
 
   useEffect(() => {
@@ -523,7 +523,6 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
     } else {
       initialDownloadedLoadedRef.current = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Parti üyelerini dinleme
@@ -538,13 +537,7 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
 
   const partyProcessedRef = useRef<Record<string, number>>({})
   const partyProcessingRef = useRef<Set<string>>(new Set())
-  // Odadaki en güncel activeSkins anlık görüntüsü — handleRemove'ın "bu skin
-  // hâlâ benim partiye gönderdiğim güncel kayıt mı?" kontrolü için senkron
-  // olarak buradan okunur (React state'i beklemeye gerek kalmadan).
   const partyActiveEntriesRef = useRef<Record<string, PartySkinEntry>>({})
-  // Az önce KENDİ cihazımızın Firebase'den kaldırdığı championId'leri geçici
-  // tutar — silme dinleyicisi bu event kendimize geri yansıdığında (biz zaten
-  // yerelde silmişken) tekrar işlemesin diye.
   const recentlySelfRemovedRef = useRef<Set<string>>(new Set())
   const activeSetRef = useRef(activeSet)
   const downloadedIdsRef = useRef(downloadedIds)
@@ -561,9 +554,6 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
   useEffect(() => {
     if (!partyRoomCode) return
     const myDeviceId = getDeviceId()
-    // Odaya (yeniden) bağlanırken daha önce bu odada işlenmiş kayıtları
-    // localStorage'dan yükle — yoksa uygulama kapanıp açıldığında Firebase'in
-    // yolladığı geçmiş activeSkins verisi baştan işlenmeye çalışılır.
     partyProcessedRef.current = getProcessedMap(partyRoomCode)
 
     let cancelled = false
@@ -574,7 +564,6 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
         if (cancelled) return
         if (entry.setBy === myDeviceId) return
         if (partyProcessedRef.current[entry.championId] === entry.setAt) return
-        // chroma seçiliyse gerçekte indirilip aktive edilecek olan id chroma'nınkidir
         const targetId = entry.chromaId || entry.skinId
         if (partyProcessingRef.current.has(targetId)) return
         if (activeSetRef.current.has(targetId)) {
@@ -586,7 +575,6 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
         partyProcessedRef.current[entry.championId] = entry.setAt
         setProcessedEntry(partyRoomCode, entry.championId, entry.setAt)
         if (entry.isCustom) {
-          // Özel skin sadece gönderenin diskinde var, depodan indirilemez
           addToast('info', `Parti: "${entry.name}" özel bir skin — sadece gönderenin bilgisayarında olduğu için senin tarafında uygulanamaz`)
           return
         }
@@ -615,8 +603,6 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
             } else {
               dl = await window.electronAPI?.downloadSkin({ championKey, skinId: entry.skinId, meta: partyMeta })
             }
-            // İndirme başarısızsa (ör. depoda olmayan bir skin) "indirildi" sayıp
-            // uygulamaya çalışma — aksi halde yanıltıcı hatalar üretir.
             if (!dl || !dl.success) {
               addToast('warning', `Parti: "${entry.name}" indirilemedi${dl?.error ? ` (${dl.error})` : ''}, uygulanmadı`)
               return
@@ -633,9 +619,6 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
 
     const unsubscribe = listenToRoomSkins(partyRoomCode, (skins) => {
       partyActiveEntriesRef.current = skins
-      // İndirilenler listesi diskten henüz okunmadıysa işlemeyi ertele —
-      // yoksa "indirilmemiş" sanılıp zaten indirilmiş bir skin tekrar
-      // indirilmeye çalışılır (kısa süreli bir yarış durumu).
       if (!initialDownloadedLoadedRef.current) {
         pendingSkins = skins
         return
@@ -643,7 +626,6 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
       processSkins(skins)
     })
 
-    // İlk yükleme bitince bekleyen (varsa) son snapshot'ı işle
     const waitId = window.setInterval(() => {
       if (initialDownloadedLoadedRef.current) {
         window.clearInterval(waitId)
@@ -658,12 +640,6 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
     }
   }, [partyRoomCode])
 
-  // Herhangi bir parti üyesi (kim aktive etmiş olursa olsun) bir skini
-  // Firebase'den kaldırdığında (bkz. maybeBroadcastRemoval) burada yakalanır
-  // ve bizim tarafımızda da kaldırılır. recentlySelfRemovedRef, BİZİM az önce
-  // tetiklediğimiz silmeyi (kendi cihazımıza geri yansıyan olayı) tekrar
-  // işlememek için kullanılıyor — "kim aktive etti" değil "bu silmeyi ben mi
-  // başlattım" sorusuna bakıyoruz, çünkü artık herkes herkesinkini silebiliyor.
   useEffect(() => {
     if (!partyRoomCode) return
     const unsubscribe = listenToRemovedSkins(partyRoomCode, async (championId, entry) => {
@@ -672,7 +648,7 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
         return
       }
       const targetId = entry.chromaId || entry.skinId
-      if (!downloadedIdsRef.current.has(targetId)) return // zaten bizde yoksa yapacak bir şey yok
+      if (!downloadedIdsRef.current.has(targetId)) return
       try {
         addToast('info', `Parti: "${entry.name}" bir üye tarafından kaldırıldı, senden de kaldırılıyor...`)
         await window.electronAPI?.removeSkin({ skinId: targetId })
@@ -688,24 +664,28 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
   }, [partyRoomCode])
 
   useEffect(() => {
-  setSelectedChromaId(null)
-  if (!modalMeta) {
-    setModalChromas([])
-    return
-  }
-  let cancelled = false
-  setLoadingChromas(true)
-  fetchSkinChromas(modalMeta.id)
-    .then((chromas) => {
-      if (!cancelled) setModalChromas(chromas)
-    })
-    .finally(() => {
-      if (!cancelled) setLoadingChromas(false)
-    })
-  return () => {
-    cancelled = true
-  }
-}, [modalMeta])
+    setSelectedChromaId(null)
+    // Custom skinler için LoL API'sinden chroma aramıyoruz
+    if (!modalMeta || modalMeta.isCustom) {
+      setModalChromas([])
+      return
+    }
+    let cancelled = false
+    setLoadingChromas(true)
+    fetchSkinChromas(modalMeta.id)
+      .then((chromas) => {
+        if (!cancelled) setModalChromas(chromas)
+      })
+      .catch(() => {
+        if (!cancelled) setModalChromas([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingChromas(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [modalMeta])
 
   // Favoriler ve sıra kalıcılığı
   useEffect(() => {
@@ -747,12 +727,12 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
       addToast('success', 'Güncelleme indirildi! Yeniden başlatmaya hazır.')
     })
     window.electronAPI.onUpdateError((_, err) => {
-  setCheckingUpdate(false)
-  console.error('Güncelleme hatası:', err)
-  addToast('error', `Güncelleme ba\u015far\u0131s\u0131z: ${err?.message || err || 'bilinmeyen hata'}`)
-})
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      setCheckingUpdate(false)
+      console.error('Güncelleme hatası:', err)
+      addToast('error', `Güncelleme başarısız: ${err?.message || err || 'bilinmeyen hata'}`)
+    })
   }, [])
+
   // --- Yardımcılar ---
 
   const metaForSkin = (skin: Skin, champion: SkinItem): SkinMeta => ({
@@ -774,48 +754,49 @@ const [partyMembers, setPartyMembers] = useState<PartyMember[]>([])
 
   const [showRandomMenu, setShowRandomMenu] = useState(false)
 
-const handleRandomChampion = () => {
-  if (champions.length === 0) return
-  const randomChamp = champions[Math.floor(Math.random() * champions.length)]
-  selectChampion(randomChamp)
-  setTab('champions')
-  setShowRandomMenu(false)
-}
-const handleCreateParty = async () => {
-  const code = await createRoom()
-  setPartyRoomCode(code)
-}
-
-const handleJoinParty = async (code: string) => {
-  const ok = await joinRoom(code)
-  if (ok) setPartyRoomCode(code)
-  return ok
-}
-
-const handleLeaveParty = async () => {
-  if (!partyRoomCode) return
-  await leaveRoom(partyRoomCode)
-  setPartyRoomCode(null)
-}
-
-const handleRandomSkin = async () => {
-  if (champions.length === 0) return
-  const randomChamp = champions[Math.floor(Math.random() * champions.length)]
-  setShowRandomMenu(false)
-  setLoadingSkins(true)
-  try {
-    const skins = await fetchChampionSkins(randomChamp.id)
-    setSelectedChampion(randomChamp)
-    setChampionSkins(skins)
+  const handleRandomChampion = () => {
+    if (champions.length === 0) return
+    const randomChamp = champions[Math.floor(Math.random() * champions.length)]
+    selectChampion(randomChamp)
     setTab('champions')
-    if (skins.length > 0) {
-      const randomSkin = skins[Math.floor(Math.random() * skins.length)]
-      setModalMeta(metaForSkin(randomSkin, randomChamp))
-    }
-  } finally {
-    setLoadingSkins(false)
+    setShowRandomMenu(false)
   }
-}
+
+  const handleCreateParty = async () => {
+    const code = await createRoom()
+    setPartyRoomCode(code)
+  }
+
+  const handleJoinParty = async (code: string) => {
+    const ok = await joinRoom(code)
+    if (ok) setPartyRoomCode(code)
+    return ok
+  }
+
+  const handleLeaveParty = async () => {
+    if (!partyRoomCode) return
+    await leaveRoom(partyRoomCode)
+    setPartyRoomCode(null)
+  }
+
+  const handleRandomSkin = async () => {
+    if (champions.length === 0) return
+    const randomChamp = champions[Math.floor(Math.random() * champions.length)]
+    setShowRandomMenu(false)
+    setLoadingSkins(true)
+    try {
+      const skins = await fetchChampionSkins(randomChamp.id)
+      setSelectedChampion(randomChamp)
+      setChampionSkins(skins)
+      setTab('champions')
+      if (skins.length > 0) {
+        const randomSkin = skins[Math.floor(Math.random() * skins.length)]
+        setModalMeta(metaForSkin(randomSkin, randomChamp))
+      }
+    } finally {
+      setLoadingSkins(false)
+    }
+  }
 
   const setAdd = (set: Set<string>, id: string) => new Set(set).add(id)
   const setRemove = (set: Set<string>, id: string) => {
@@ -853,11 +834,15 @@ const handleRandomSkin = async () => {
   const removeFromQueue = (id: string) => setQueue((prev) => prev.filter((q) => q.id !== id))
   const clearQueue = () => setQueue([])
 
-  // --- İndirme (aktif ETMEZ, sadece indirir) ---
+  // --- İndirme ---
 
   const handleDownload = async (meta: SkinMeta) => {
     if (!window.electronAPI) return
     if (downloading.has(meta.id) || downloadedIds.has(meta.id)) return
+    if (meta.isCustom) {
+      addToast('error', 'Özel skinler dışarıdan indirilemez, bilgisayarınızdan yüklenmelidir')
+      return
+    }
     if (!meta.championKey) {
       addToast('error', 'Bu skin için indirme bilgisi eksik (şampiyon anahtarı yok)')
       return
@@ -884,11 +869,6 @@ const handleRandomSkin = async () => {
   }
   
   // --- Özel (custom) skin içe aktarma ---
-  // Kullanıcının kendi .fantome/.zip dosyasını seçip WAD içeriğinden şampiyonu
-  // otomatik tespit eder, champions listesiyle eşleştirir ve meta'yı kaydeder.
-  // Not: Parti Modu'nda özel skinler diğer üyelere otomatik gitmez — onlar
-  // LoLskins deposundan indirilebilen skinlerle sınırlı, senin diskindeki
-  // özel dosyayı arkadaşının indirmesinin bir yolu yok.
   const handleImportCustomSkin = async () => {
     if (!window.electronAPI) return
     const res = await window.electronAPI.importCustomSkin()
@@ -897,6 +877,14 @@ const handleRandomSkin = async () => {
       addToast('error', res.error || 'Skin dosyası içe aktarılamadı')
       return
     }
+
+    // Şampiyon tespit güvencesi
+    if (!res.detectedChampions || res.detectedChampions.length === 0) {
+      addToast('error', 'Dosyadan herhangi bir şampiyon tespit edilemedi')
+      await window.electronAPI.removeSkin({ skinId: res.customId })
+      return
+    }
+
     const detected = res.detectedChampions[0]
     const champion = champions.find((c) => c.id.toLowerCase() === detected.toLowerCase())
     if (!champion) {
@@ -904,60 +892,66 @@ const handleRandomSkin = async () => {
       await window.electronAPI.removeSkin({ skinId: res.customId })
       return
     }
+
     if (res.detectedChampions.length > 1) {
       addToast(
         'warning',
         `Dosyada birden fazla şampiyon tespit edildi (${res.detectedChampions.join(', ')}) — ${champion.name} kullanılacak`
       )
     }
+
     const saveRes = await window.electronAPI.saveCustomSkinMeta({
       customId: res.customId,
       meta: {
+        id: res.customId,
         name: res.fileName || `${champion.name} (Özel)`,
         championId: champion.id,
-        championKey: champion.key,
-        championName: champion.name
+        championKey: champion.key || '',
+        championName: champion.name,
+        isCustom: true
       }
     })
+
     if (!saveRes.success) {
       addToast('error', saveRes.error || 'Skin kaydedilemedi')
       await window.electronAPI.removeSkin({ skinId: res.customId })
       return
     }
+
     addToast('success', `"${champion.name}" için özel skin eklendi`)
-    refreshDownloaded()
+    await refreshDownloaded()
   }
 
   const handleDownloadChroma = async (baseMeta: SkinMeta, chroma: Chroma) => {
-  if (!window.electronAPI) return
-  if (downloading.has(chroma.id) || downloadedIds.has(chroma.id)) return
-  if (!baseMeta.championKey) {
-    addToast('error', 'Bu skin için indirme bilgisi eksik (şampiyon anahtarı yok)')
-    return
+    if (!window.electronAPI) return
+    if (downloading.has(chroma.id) || downloadedIds.has(chroma.id)) return
+    if (!baseMeta.championKey) {
+      addToast('error', 'Bu skin için indirme bilgisi eksik (şampiyon anahtarı yok)')
+      return
+    }
+    setDownloading((prev) => setAdd(prev, chroma.id))
+    setDownloadProgress((prev) => ({ ...prev, [chroma.id]: 0 }))
+    const res = await window.electronAPI.downloadChroma({
+      championKey: baseMeta.championKey,
+      skinId: baseMeta.id,
+      chromaId: chroma.id,
+      meta: { ...baseMeta, id: chroma.id, name: `${baseMeta.name} — ${chroma.name}` }
+    })
+    setDownloading((prev) => setRemove(prev, chroma.id))
+    setDownloadProgress((prev) => {
+      const next = { ...prev }
+      delete next[chroma.id]
+      return next
+    })
+    if (res.success) {
+      addToast('success', `"${chroma.name}" indirildi`)
+      refreshDownloaded()
+    } else {
+      addToast('error', res.error || 'İndirme başarısız')
+    }
   }
-  setDownloading((prev) => setAdd(prev, chroma.id))
-  setDownloadProgress((prev) => ({ ...prev, [chroma.id]: 0 }))
-  const res = await window.electronAPI.downloadChroma({
-    championKey: baseMeta.championKey,
-    skinId: baseMeta.id,
-    chromaId: chroma.id,
-    meta: { ...baseMeta, id: chroma.id, name: `${baseMeta.name} — ${chroma.name}` }
-  })
-  setDownloading((prev) => setRemove(prev, chroma.id))
-  setDownloadProgress((prev) => {
-    const next = { ...prev }
-    delete next[chroma.id]
-    return next
-  })
-  if (res.success) {
-    addToast('success', `"${chroma.name}" indirildi`)
-    refreshDownloaded()
-  } else {
-    addToast('error', res.error || 'İndirme başarısız')
-  }
-}
 
-  // --- Aktivasyon (tekil) ---
+  // --- Aktivasyon ---
 
   const handleApply = async (meta: SkinMeta, chromaOf?: string) => {
     if (!window.electronAPI) return
@@ -967,13 +961,13 @@ const handleRandomSkin = async () => {
       return
     }
     if (!downloadedIdsRef.current.has(meta.id)) {
-      addToast('error', 'Önce skini indirmeniz gerekiyor')
+      addToast('error', 'Önce skini indirmeniz veya yüklemeniz gerekiyor')
       return
     }
     setApplyingIds((prev) => setAdd(prev, meta.id))
     const res: ApplySkinsResult = await window.electronAPI.applySkins({ skinIds: [meta.id] })
     setApplyingIds((prev) => setRemove(prev, meta.id))
-        if (!res.success) {
+    if (!res.success) {
       addToast('error', res.error || 'Skin aktif edilemedi')
       return
     }
@@ -981,9 +975,7 @@ const handleRandomSkin = async () => {
       addToast('warning', `"${meta.name}" zaten aktifti`)
     }
     res.warnings?.forEach((w) => addToast('warning', w))
-       if (partyRoomCode) {
-      // chromaOf verilmişse meta.id aslında chroma'nın kendi id'si — asıl
-      // (indirme için gereken) skin id chromaOf'tur, chroma id ayrıca gönderilir.
+    if (partyRoomCode) {
       broadcastActiveSkin(partyRoomCode, {
         skinId: chromaOf || meta.id,
         ...(chromaOf ? { chromaId: meta.id } : {}),
@@ -995,9 +987,10 @@ const handleRandomSkin = async () => {
       })
     }
   }
+
   useEffect(() => {
-  handleApplyRef.current = handleApply
-})
+    handleApplyRef.current = handleApply
+  })
 
   const handleDeactivate = async (meta: SkinMeta) => {
     if (!window.electronAPI) return
@@ -1012,11 +1005,6 @@ const handleRandomSkin = async () => {
 
   // --- Kaldırma ---
 
-  // Silinen skin partide hâlâ (kim aktive etmiş olursa olsun) o şampiyon için
-  // güncel kayıtsa, Firebase'deki kaydı da sil — böylece parti üyesinin
-  // bilgisayarından da otomatik kaldırılır. recentlySelfRemovedRef'e ekleyip
-  // silme dinleyicisinin bu olayı kendimize geri geldiğinde tekrar işlemesini
-  // (zaten yerelde sildiğimiz için) engelliyoruz.
   const maybeBroadcastRemoval = (meta: SkinMeta) => {
     if (!partyRoomCode || !meta.championId) return
     const entry = partyActiveEntriesRef.current[meta.championId]
@@ -1043,7 +1031,7 @@ const handleRandomSkin = async () => {
     }
   }
 
-  // --- Patchle: sıradaki TÜM skinleri indir + aktif et ---
+  // --- Patchle ---
 
   const handlePatch = async () => {
     if (!window.electronAPI) return
@@ -1055,6 +1043,11 @@ const handleRandomSkin = async () => {
       const missing = queue.filter((q) => !downloadedIds.has(q.id))
       for (let i = 0; i < missing.length; i++) {
         const meta = missing[i]
+        if (meta.isCustom) {
+          failedIds.add(meta.id)
+          addToast('error', `"${meta.name}" özel bir skin ve dosyası eksik olduğu için atlanıyor`)
+          continue
+        }
         setPatchProgress(`İndiriliyor (${i + 1}/${missing.length}): ${meta.name}`)
         setDownloading((prev) => setAdd(prev, meta.id))
         setDownloadProgress((prev) => ({ ...prev, [meta.id]: 0 }))
@@ -1076,7 +1069,7 @@ const handleRandomSkin = async () => {
       }
       refreshDownloaded()
 
-      // 2) İndirilenleri topluca aktif et (zaten aktif olanlar atlanır)
+      // 2) İndirilenleri topluca aktif et
       const applyIds = queue.filter((q) => !failedIds.has(q.id)).map((q) => q.id)
       if (applyIds.length > 0) {
         setPatchProgress('Skinler uygulanıyor...')
@@ -1088,7 +1081,6 @@ const handleRandomSkin = async () => {
           if (res.missing?.length) {
             addToast('warning', `${res.missing.length} skin dosyası bulunamadı, atlandı`)
           }
-          // Başarıyla aktif edilenleri ve zaten aktif olanları sıradan çıkar
           const applied = new Set(applyIds.filter((id) => !(res.missing || []).includes(id)))
           setQueue((prev) => prev.filter((q) => !applied.has(q.id)))
         }
@@ -1098,7 +1090,7 @@ const handleRandomSkin = async () => {
           .filter((q) => failedIds.has(q.id))
           .map((q) => q.name)
           .join(', ')
-        addToast('warning', `İndirilemediği için atlananlar: ${failedNames}`)
+        addToast('warning', `Atlanan skinler: ${failedNames}`)
       }
     } finally {
       setPatchProgress('')
@@ -1106,7 +1098,7 @@ const handleRandomSkin = async () => {
     }
   }
 
-  // --- Patchleri Durdur: tüm aktif skinleri pasif et ---
+  // --- Patchleri Durdur ---
   const handleStopPatches = async () => {
     if (!window.electronAPI) return
     const activeIds = Array.from(activeSet)
@@ -1150,13 +1142,12 @@ const handleRandomSkin = async () => {
     try {
       const res = await window.electronAPI.checkForUpdates()
       setCheckingUpdate(false)
-      
       if (res?.success) {
         addToast('success', 'Güncelleme kontrolü tamamlandı')
       } else {
         addToast('error', res?.error || 'Güncelleme kontrolü başarısız')
       }
-    } catch (error) {
+    } catch {
       setCheckingUpdate(false)
       addToast('error', 'Güncelleme kontrolü sırasında hata oluştu')
     }
@@ -1293,29 +1284,28 @@ const handleRandomSkin = async () => {
             const pos =
               c.id === 'KhaZix' ? '95% center' : c.id === 'MonkeyKing' ? '80% center' : CHAMPION_POSITIONS[c.id] || 'center'
             return (
-            <button
-              key={c.id}
-              onClick={() => selectChampion(c)}
-              className="group relative bg-white/[0.03] border border-white/[0.07] rounded-xl overflow-hidden transition-all duration-300 ease-out hover:-translate-y-1 hover:border-sky-400/70 hover:shadow-[0_8px_24px_-4px_rgba(56,189,248,0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
-            >
-              <div className="pointer-events-none absolute inset-0 z-10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 ring-1 ring-inset ring-sky-300/40"></div>
-              <div className="aspect-[3/4] relative overflow-hidden">
-  <img
-    src={`./champions/${c.id === 'KhaZix' ? 'khazix' : c.id === 'MonkeyKing' ? 'wukong' : getChampionImageFilename(c.id)}.jpg`}
-    alt={c.name}
-    className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.12]"
-    style={{ objectPosition: pos, transformOrigin: pos }}
-    loading="lazy"
-    onError={(e) => {
-      console.error(`Görsel yüklenemedi: ${c.id} -> ${getChampionImageFilename(c.id)}.jpg`);
-      (e.target as HTMLImageElement).style.display = 'none';
-    }}
-  />
-  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent pt-16 pb-2 px-2">
-    <p className="text-xs font-medium text-white truncate">{c.name}</p>
-  </div>
-</div>
-            </button>
+              <button
+                key={c.id}
+                onClick={() => selectChampion(c)}
+                className="group relative bg-white/[0.03] border border-white/[0.07] rounded-xl overflow-hidden transition-all duration-300 ease-out hover:-translate-y-1 hover:border-sky-400/70 hover:shadow-[0_8px_24px_-4px_rgba(56,189,248,0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70"
+              >
+                <div className="pointer-events-none absolute inset-0 z-10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 ring-1 ring-inset ring-sky-300/40"></div>
+                <div className="aspect-[3/4] relative overflow-hidden">
+                  <img
+                    src={`./champions/${c.id === 'KhaZix' ? 'khazix' : c.id === 'MonkeyKing' ? 'wukong' : getChampionImageFilename(c.id)}.jpg`}
+                    alt={c.name}
+                    className="w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.12]"
+                    style={{ objectPosition: pos, transformOrigin: pos }}
+                    loading="lazy"
+                    onError={(e) => {
+                      (e.target as HTMLImageElement).style.display = 'none'
+                    }}
+                  />
+                  <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent pt-16 pb-2 px-2">
+                    <p className="text-xs font-medium text-white truncate">{c.name}</p>
+                  </div>
+                </div>
+              </button>
             )
           })}
         </div>
@@ -1333,10 +1323,11 @@ const handleRandomSkin = async () => {
       downloadedMetas.filter(metaMatches),
       Package,
       'İndirilmiş skin yok',
-      'İndirdiğiniz skinler burada görünecek. İndirme, skini otomatik aktif ETMEZ.',
+      'İndirdiğiniz veya eklediğiniz özel skinler burada görünecek. İndirme, skini otomatik aktif ETMEZ.',
       true
     )
   }
+
   return (
     <div className="h-screen w-screen flex flex-col bg-[#0f0f11] text-gray-100 overflow-hidden select-none">
       <div className="flex flex-1 min-h-0">
@@ -1368,37 +1359,37 @@ const handleRandomSkin = async () => {
         <main className="flex-1 min-w-0 flex flex-col">
           {/* Üst bar: başlık + arama */}
           <header className="shrink-0 flex items-center gap-4 px-5 py-3 border-b border-white/[0.06] bg-white/[0.02]">
-          <div className="relative">
-  <button
-    onClick={() => setShowRandomMenu((v) => !v)}
-    className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-gray-300 hover:bg-sky-500/15 hover:border-sky-500/30 hover:text-sky-300 transition"
-  >
-    <Dices className="w-3.5 h-3.5" strokeWidth={2} /> Rastgele
-  </button>
-  {showRandomMenu && (
-    <>
-      <div className="fixed inset-0 z-40" onClick={() => setShowRandomMenu(false)}></div>
-      <div className="absolute top-full left-0 mt-2 z-50 w-44 bg-[#1c1c1f] border border-white/[0.08] rounded-xl shadow-2xl shadow-black/50 overflow-hidden">
-        <button
-          onClick={handleRandomChampion}
-          className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition flex items-center gap-2"
-        >
-          <Wand2 className="w-4 h-4" strokeWidth={2} /> Rastgele Karakter
-        </button>
-        <button
-          onClick={handleRandomSkin}
-          className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition border-t border-white/[0.06] flex items-center gap-2"
-        >
-          <Palette className="w-4 h-4" strokeWidth={2} /> Rastgele Skin
-        </button>
-      </div>
-    </>
-  )}
-</div>
+            <div className="relative">
+              <button
+                onClick={() => setShowRandomMenu((v) => !v)}
+                className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-gray-300 hover:bg-sky-500/15 hover:border-sky-500/30 hover:text-sky-300 transition"
+              >
+                <Dices className="w-3.5 h-3.5" strokeWidth={2} /> Rastgele
+              </button>
+              {showRandomMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowRandomMenu(false)}></div>
+                  <div className="absolute top-full left-0 mt-2 z-50 w-44 bg-[#1c1c1f] border border-white/[0.08] rounded-xl shadow-2xl shadow-black/50 overflow-hidden">
+                    <button
+                      onClick={handleRandomChampion}
+                      className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition flex items-center gap-2"
+                    >
+                      <Wand2 className="w-4 h-4" strokeWidth={2} /> Rastgele Karakter
+                    </button>
+                    <button
+                      onClick={handleRandomSkin}
+                      className="w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition border-t border-white/[0.06] flex items-center gap-2"
+                    >
+                      <Palette className="w-4 h-4" strokeWidth={2} /> Rastgele Skin
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
             <h1 className="text-lg font-bold tracking-tight truncate">{headerTitle}</h1>
             {tab === 'champions' && !selectedChampion && (
-  <span className="text-sm text-gray-500">({champions.length})</span>
-)}
+              <span className="text-sm text-gray-500">({champions.length})</span>
+            )}
             {tab === 'champions' && selectedChampion && (
               <span className="text-xs text-gray-500 bg-white/[0.05] border border-white/[0.08] rounded-full px-2 py-0.5">
                 {championSkins.length} skin
@@ -1443,48 +1434,49 @@ const handleRandomSkin = async () => {
 
       {/* Skin detay modalı */}
       {modalMeta && (() => {
-  const selectedChroma = modalChromas.find((c) => c.id === selectedChromaId) ?? null
-  const activeModalMeta: SkinMeta = selectedChroma
-  ? { ...modalMeta, id: selectedChroma.id }
-  : modalMeta
-  return (
-    <SkinModal
-      meta={activeModalMeta}
-      isDownloaded={downloadedIds.has(activeModalMeta.id)}
-      downloadProgress={
-        downloading.has(activeModalMeta.id) ? downloadProgress[activeModalMeta.id] ?? 0 : undefined
-      }
-      isActive={activeSet.has(activeModalMeta.id)}
-      isFavorite={favoriteIds.has(activeModalMeta.id)}
-      inQueue={queueIds.has(activeModalMeta.id)}
-      isApplying={applyingIds.has(activeModalMeta.id)}
-      isRemoving={removingIds.has(activeModalMeta.id)}
-      onClose={() => setModalMeta(null)}
-      onDownload={() =>
-        selectedChroma ? handleDownloadChroma(modalMeta, selectedChroma) : handleDownload(modalMeta)
-      }
-      onApply={() => handleApply(activeModalMeta, selectedChroma ? modalMeta.id : undefined)}
-      onDeactivate={() => handleDeactivate(activeModalMeta)}
-      onRemove={() => handleRemove(activeModalMeta)}
-      onToggleFavorite={() => toggleFavorite(activeModalMeta)}
-      onToggleQueue={() => toggleQueue(activeModalMeta)}
-      chromas={modalChromas}
-      loadingChromas={loadingChromas}
-      selectedChromaId={selectedChromaId}
-      onSelectChroma={setSelectedChromaId}
-    />
-  )
-})()}
-{showPartyModal && (
-  <PartyModal
-    roomCode={partyRoomCode}
-    members={partyMembers}
-    onClose={() => setShowPartyModal(false)}
-    onCreate={handleCreateParty}
-    onJoin={handleJoinParty}
-    onLeave={handleLeaveParty}
-  />
-)}
+        const selectedChroma = modalChromas.find((c) => c.id === selectedChromaId) ?? null
+        const activeModalMeta: SkinMeta = selectedChroma
+          ? { ...modalMeta, id: selectedChroma.id }
+          : modalMeta
+        return (
+          <SkinModal
+            meta={activeModalMeta}
+            isDownloaded={downloadedIds.has(activeModalMeta.id)}
+            downloadProgress={
+              downloading.has(activeModalMeta.id) ? downloadProgress[activeModalMeta.id] ?? 0 : undefined
+            }
+            isActive={activeSet.has(activeModalMeta.id)}
+            isFavorite={favoriteIds.has(activeModalMeta.id)}
+            inQueue={queueIds.has(activeModalMeta.id)}
+            isApplying={applyingIds.has(activeModalMeta.id)}
+            isRemoving={removingIds.has(activeModalMeta.id)}
+            onClose={() => setModalMeta(null)}
+            onDownload={() =>
+              selectedChroma ? handleDownloadChroma(modalMeta, selectedChroma) : handleDownload(modalMeta)
+            }
+            onApply={() => handleApply(activeModalMeta, selectedChroma ? modalMeta.id : undefined)}
+            onDeactivate={() => handleDeactivate(activeModalMeta)}
+            onRemove={() => handleRemove(activeModalMeta)}
+            onToggleFavorite={() => toggleFavorite(activeModalMeta)}
+            onToggleQueue={() => toggleQueue(activeModalMeta)}
+            chromas={modalChromas}
+            loadingChromas={loadingChromas}
+            selectedChromaId={selectedChromaId}
+            onSelectChroma={setSelectedChromaId}
+          />
+        )
+      })()}
+
+      {showPartyModal && (
+        <PartyModal
+          roomCode={partyRoomCode}
+          members={partyMembers}
+          onClose={() => setShowPartyModal(false)}
+          onCreate={handleCreateParty}
+          onJoin={handleJoinParty}
+          onLeave={handleLeaveParty}
+        />
+      )}
       <Toasts toasts={toasts} />
     </div>
   )
