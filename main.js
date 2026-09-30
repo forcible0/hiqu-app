@@ -4,17 +4,14 @@ const { spawn } = require('child_process')
 const https = require('https')
 const fs = require('fs')
 const path = require('path')
-const { mergeWads, parseWad, readWadHashes, verifyWadFile } = require('./wad.js')
+const { mergeWads, parseWadHeaderAndToc, readWadHashes, verifyWadFile } = require('./wad.js')
 
 let mainWindow = null
 
-// Skin indirme ve cslol-tools entegrasyonu
 const SKINS_DIR = path.join(app.getPath('appData'), 'asset-manager', 'skins')
 const SKINS_META_FILE = path.join(SKINS_DIR, 'skins-meta.json')
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json')
 
-// Buck -> Hiqu yeniden adlandırma: eski userData klasöründeki
-// ayarları yeni konuma bir kez kopyala (ayarların sıfırlanmaması için)
 try {
   const legacyDir = path.join(app.getPath('appData'), 'buck')
   const legacySettings = path.join(legacyDir, 'settings.json')
@@ -25,14 +22,9 @@ try {
 } catch (e) {
   console.error('Eski ayarlar taşınamadı:', e.message)
 }
+
 const LEAGUE_SKINS_BASE = 'https://raw.githubusercontent.com/forcible0/LoLskins/main/skins'
 
-// Skin/chroma/şampiyon ID'lerini doğrular — bu değerler her zaman kendi
-// API'mizden gelmiyor: Parti Modu'nda Firebase'den (potansiyel olarak
-// güvenilmeyen bir kaynaktan — odaya yazabilen herkesten) geliyor. path.join
-// ile dosya yoluna eklenmeden önce mutlaka sayısal ve makul uzunlukta
-// olduğu doğrulanmalı, yoksa "../../.." gibi bir payload SKINS_DIR dışına
-// çıkıp rastgele bir konuma dosya yazdırabilir (path traversal).
 function isValidId(id) {
   return typeof id === 'string' && /^\d+$/.test(id) && id.length <= 20
 }
@@ -40,20 +32,16 @@ function isValidId(id) {
 function readSettings() {
   try {
     const raw = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8'))
-    // Eski ayar anahtarlarını taşı (cslol-tools → LTK Manager → patcher_host geçişi)
     if (raw.ltkPath === undefined && raw.cslolPath !== undefined) raw.ltkPath = raw.cslolPath
     if (raw.dllPath === undefined && raw.gameDir !== undefined) raw.dllPath = raw.gameDir
     if (raw.patcherPath === undefined && raw.ltkPath !== undefined) {
       let p = raw.ltkPath
-      // Kullanıcı ltk-manager.exe seçmişse aynı klasördeki ltk_patcher_host.exe'ye yönlendir
       if (/ltk-manager\.exe$/i.test(p)) {
         const hostExe = path.join(path.dirname(p), 'ltk_patcher_host.exe')
         if (fs.existsSync(hostExe)) p = hostExe
       }
       raw.patcherPath = p
     }
-   
-    // DLL Path boşsa patcher'ın yanındaki ltk_patcher_dll.dll'i varsayılan olarak öner
     if (!raw.dllPath && raw.patcherPath) {
       const dll = path.join(path.dirname(raw.patcherPath), 'ltk_patcher_dll.dll')
       if (fs.existsSync(dll)) raw.dllPath = dll
@@ -75,8 +63,6 @@ function writeSettings(settings) {
   }
 }
 
-// ==================== SKIN META VERİSİ ====================
-// İndirilen her skin için isim/şampiyon/görsel bilgisi tutulur (İndirilenler sekmesi için)
 function readSkinsMeta() {
   try {
     return JSON.parse(fs.readFileSync(SKINS_META_FILE, 'utf8'))
@@ -94,16 +80,9 @@ function writeSkinsMeta(meta) {
   }
 }
 
-// ==================== ÇOKLU SKİN DURUMU ====================
-// MİMARİ: Tek bir ltk_patcher_host süreci çalışır ve overlay klasöründe TÜM
-// aktif skinlerin birleştirilmiş wad'ları bulunur. (Host aynı anda yalnızca
-// tek süreç olabilir — named pipe çakışması; bu yüzden skin eklemek/çıkarmak
-// = overlay'i yeniden kur + patcher'ı yeniden başlat.)
 let patcherProcess = null
-
-// Aktif skin kümesi — settings.json içinde kalıcıdır (uygulama yeniden
-// başlatıldığında aktif skinler hatırlanır)
 const activeSkins = new Set()
+
 try {
   const saved = readSettings().activeSkins
   if (Array.isArray(saved)) {
@@ -127,19 +106,16 @@ function persistActiveSkins() {
 function stopPatcherProcess() {
   const proc = patcherProcess
   if (!proc) return
-  patcherProcess = null // 'exit' handler'ın tekrar olay göndermesini engelle
+  patcherProcess = null
   try {
     if (proc.stopPatcher) proc.stopPatcher(); else proc.kill()
-  } catch { /* süreç zaten kapanmış olabilir */ }
+  } catch { /* yoksay */ }
 }
-// Redirect destekli, ilerleme raporlu dosya indirme
+
 function downloadFile(url, dest, onProgress, redirectCount = 0) {
   return new Promise((resolve, reject) => {
-    if (redirectCount > 5) {
-      return reject(new Error('Çok fazla yönlendirme'))
-    }
+    if (redirectCount > 5) return reject(new Error('Çok fazla yönlendirme'))
     https.get(url, (res) => {
-      // Redirect takip et
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         res.resume()
         return resolve(downloadFile(res.headers.location, dest, onProgress, redirectCount + 1))
@@ -167,7 +143,6 @@ function downloadFile(url, dest, onProgress, redirectCount = 0) {
   })
 }
 
-// electron-updater yapılandırması (GitHub Releases - package.json > build.publish)
 autoUpdater.autoDownload = true
 autoUpdater.autoInstallOnAppQuit = true
 
@@ -182,19 +157,17 @@ function createWindow() {
     },
     autoHideMenuBar: true,
     icon: path.join(
-  app.isPackaged ? process.resourcesPath : __dirname,
-  app.isPackaged ? 'icon.ico' : 'build/icon.ico'
-)
+      app.isPackaged ? process.resourcesPath : __dirname,
+      app.isPackaged ? 'icon.ico' : 'build/icon.ico'
+    )
   })
 
-  // Development modunda DevTools aç
   if (process.env.NODE_ENV === 'development') {
     mainWindow.webContents.openDevTools()
   }
 
   mainWindow.loadFile('dist/index.html')
 
-  // Önceki oturumda aktif bırakılan skinler varsa patcher'ı otomatik geri yükle
   mainWindow.webContents.on('did-finish-load', () => {
     if (activeSkins.size > 0 && !patcherProcess) {
       setTimeout(async () => {
@@ -208,42 +181,23 @@ function createWindow() {
   })
 }
 
-// autoUpdater event'lerini arayüze ilet
 function sendToRenderer(channel, data) {
   if (mainWindow && !mainWindow.isDestroyed()) {
     mainWindow.webContents.send(channel, data)
   }
 }
 
-autoUpdater.on('update-available', (info) => {
-  sendToRenderer('update-available', info)
-})
+autoUpdater.on('update-available', (info) => sendToRenderer('update-available', info))
+autoUpdater.on('update-not-available', (info) => sendToRenderer('update-not-available', info))
+autoUpdater.on('download-progress', (progress) => sendToRenderer('download-progress', progress))
+autoUpdater.on('update-downloaded', (info) => sendToRenderer('update-downloaded', info))
+autoUpdater.on('error', (err) => sendToRenderer('update-error', err))
 
-autoUpdater.on('update-not-available', (info) => {
-  sendToRenderer('update-not-available', info)
-})
-
-autoUpdater.on('download-progress', (progress) => {
-  sendToRenderer('download-progress', progress)
-})
-
-autoUpdater.on('update-downloaded', (info) => {
-  sendToRenderer('update-downloaded', info)
-})
-
-autoUpdater.on('error', (err) => {
-  sendToRenderer('update-error', err)
-})
-
-// IPC handlers
 ipcMain.handle('check-for-updates', async () => {
   try {
-    // Electron-updater sadece paketlenmiş versiyonda çalışır
-    // Development modunda simüle ediyoruz
     if (process.env.NODE_ENV === 'development' || !app.isPackaged) {
       return { success: true, message: 'Development modunda güncelleme kontrolü simüle edildi' }
     }
-
     await autoUpdater.checkForUpdates()
     return { success: true }
   } catch (error) {
@@ -251,17 +205,10 @@ ipcMain.handle('check-for-updates', async () => {
   }
 })
 
-ipcMain.handle('get-app-version', () => {
-  return app.getVersion()
-})
-
-// ==================== SKIN YÖNETİMİ IPC ====================
-
-// Ayarlar
+ipcMain.handle('get-app-version', () => app.getVersion())
 ipcMain.handle('get-settings', () => readSettings())
 
 ipcMain.handle('save-settings', (_event, settings) => {
-  // activeSkins anahtarı renderer'dan gelmesin diye korunur (iç durum)
   const current = readSettings()
   const merged = { ...current, ...settings, activeSkins: [...activeSkins] }
   const ok = writeSettings(merged)
@@ -271,7 +218,6 @@ ipcMain.handle('save-settings', (_event, settings) => {
   return { success: ok, error: ok ? undefined : 'Ayarlar dosyaya yazılamadı' }
 })
 
-// ltk_patcher_host.exe seçici
 ipcMain.handle('select-patcher-path', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'ltk_patcher_host.exe seçin',
@@ -281,7 +227,6 @@ ipcMain.handle('select-patcher-path', async () => {
   return result.canceled ? null : result.filePaths[0]
 })
 
-// Patcher DLL seçici
 ipcMain.handle('select-dll-path', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'ltk_patcher_dll.dll dosyasını seçin',
@@ -291,7 +236,6 @@ ipcMain.handle('select-dll-path', async () => {
   return result.canceled ? null : result.filePaths[0]
 })
 
-// League "Game" klasörünü bul: önce ayar, yoksa yaygın kurulum konumları
 function resolveGameDir(settings) {
   if (settings.gamePath) {
     const p = path.basename(settings.gamePath).toLowerCase() === 'game'
@@ -309,7 +253,6 @@ function resolveGameDir(settings) {
   return null
 }
 
-// League Game klasörü seçici
 ipcMain.handle('select-game-path', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'League of Legends "Game" klasörünü seçin',
@@ -317,29 +260,18 @@ ipcMain.handle('select-game-path', async () => {
   })
   return result.canceled ? null : result.filePaths[0]
 })
-// Patcher ayarlarını + oyun klasörünü doğrula
+
 function validatePatcherSettings() {
   const settings = readSettings()
-  if (!settings.patcherPath) {
-    return { error: 'Patcher Yolu ayarlanmamış (Ayarlar menüsünden ltk_patcher_host.exe seçin)' }
-  }
-  if (!fs.existsSync(settings.patcherPath)) {
-    return { error: 'ltk_patcher_host.exe bulunamadı: ' + settings.patcherPath }
-  }
-  if (!settings.dllPath) {
-    return { error: 'DLL Yolu ayarlanmamış (Ayarlar menüsünden ltk_patcher_dll.dll seçin)' }
-  }
-  if (!fs.existsSync(settings.dllPath)) {
-    return { error: 'ltk_patcher_dll.dll bulunamadı: ' + settings.dllPath }
-  }
+  if (!settings.patcherPath) return { error: 'Patcher Yolu ayarlanmamış' }
+  if (!fs.existsSync(settings.patcherPath)) return { error: 'ltk_patcher_host.exe bulunamadı' }
+  if (!settings.dllPath) return { error: 'DLL Yolu ayarlanmamış' }
+  if (!fs.existsSync(settings.dllPath)) return { error: 'ltk_patcher_dll.dll bulunamadı' }
   const gameDir = resolveGameDir(settings)
-  if (!gameDir) {
-    return { error: 'League of Legends "Game" klasörü bulunamadı. Ayarlar menüsünden oyun klasörünü seçin.' }
-  }
+  if (!gameDir) return { error: 'League of Legends "Game" klasörü bulunamadı.' }
   return { settings, gameDir }
 }
 
-// Oyun wad'ını bul: önce DATA/FINAL/Champions, yoksa Game altında derin arama
 function findGameWad(gameDir, wadName) {
   const direct = path.join(gameDir, 'DATA', 'FINAL', 'Champions', wadName)
   if (fs.existsSync(direct)) return direct
@@ -357,19 +289,9 @@ function findGameWad(gameDir, wadName) {
   return findInGame(gameDir, 0)
 }
 
-// Cross-wad indeks: bir chunk (hash) hem şampiyonun kendi wad'ında hem de
-// paylaşılan wad'larda (Common, Global, harita wad'ları) aynı anda
-// bulunabilir. LTK'nin resmi overlay builder'ı ("Hash index: path_hash ->
-// o chunk'ı içeren TÜM wad'ların listesi" / "Distribute mod files to all
-// affected WADs, e.g. champion assets in Map WADs") tam olarak bunun için
-// bir indeks kuruyor. Biz de aynısını, sadece ilgili adayları tarayarak
-// (performans için tüm DATA/FINAL değil) yapıyoruz: yalnızca header+TOC
-// okunuyor (readWadHashes), veri kısmına hiç dokunulmuyor — yüzlerce MB'lık
-// bir harita wad'ı için bile bu birkaç milisaniye sürer.
 let _crossWadIndexCache = null
 let _crossWadIndexCacheDir = null
 
-// Önbelleği geçersiz kılar — oyun yolu ayarlardan değiştirildiğinde çağrılır.
 function invalidateCrossWadIndexCache() {
   _crossWadIndexCache = null
   _crossWadIndexCacheDir = null
@@ -395,14 +317,13 @@ function buildCrossWadIndex(gameDir) {
   const globalWad = path.join(gameDir, 'DATA', 'FINAL', 'Global.wad.client')
   if (fs.existsSync(globalWad)) candidates.push(globalWad)
 
-  // hash -> Set<wadPath>
   const index = new Map()
   for (const wadPath of candidates) {
     let hashes
     try {
       hashes = readWadHashes(wadPath)
     } catch {
-      continue // bozuk/okunamayan bir wad indekslemeyi durdurmasın
+      continue
     }
     for (const h of hashes) {
       let set = index.get(h)
@@ -418,12 +339,6 @@ function buildCrossWadIndex(gameDir) {
   return index
 }
 
-
-// LTK Manager / cslol-manager gibi, mod wad'ındaki chunk'lar oyunun asıl wad'ının
-// ÜZERİNE bindirilir. Mod dosyası sadece değişen chunk'ları içerir (birkaç KB olması
-// normal) — mod dosyasını olduğu gibi kopyalamak boş bir oyun görünümüne yol açar,
-// bu yüzden merge şarttır. Birden çok skin aynı oyun wad'ını hedefliyorsa modlar
-// zincirleme birleştirilir: (oyun + mod1) + mod2 + ...
 function rebuildOverlay(skinIds, gameDir) {
   const overlayDir = path.join(app.getPath('userData'), 'overlay')
   const extractDir = path.join(app.getPath('userData'), 'overlay_extract')
@@ -434,7 +349,6 @@ function rebuildOverlay(skinIds, gameDir) {
 
   const sevenZip = require('7zip-bin')
   const { execFileSync } = require('child_process')
-  // wad adı (küçük harf) → { name, files: [mod wad yolları — skin sırasına göre] }
   const wadGroups = new Map()
   const warnings = []
 
@@ -460,8 +374,7 @@ function rebuildOverlay(skinIds, gameDir) {
       warnings.push(`Fantome içinde WAD klasörü yok (${skinId})`)
       continue
     }
-    // Not: Dizin gezisini kendimiz yapıyoruz çünkü Dirent.path/parentPath
-    // Electron'un Node sürümünde (Node < 20.12) mevcut değil.
+
     let found = 0
     const walk = (dir) => {
       for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -480,42 +393,41 @@ function rebuildOverlay(skinIds, gameDir) {
   }
 
   if (wadGroups.size === 0) {
-    throw new Error('Seçili skinler için wad bulunamadı (bozuk indirme olabilir)')
+    throw new Error('Seçili skinler için wad bulunamadı')
   }
 
   let mergedCount = 0
-  // Tanı logu: her rebuild'de baştan yazılır (%APPDATA%\hiqu\overlay-debug.log).
-  // Bir skin oyunu çökertiyorsa sebebini (WAD sürümü, sıkıştırma türü, boyut...) buradan okuyabiliriz.
   const dbgLines = [`=== ${new Date().toISOString()} skins=[${skinIds.join(',')}] ===`]
   const flushDbg = () => {
     try {
       fs.writeFileSync(path.join(app.getPath('userData'), 'overlay-debug.log'), dbgLines.join('\n') + '\n')
     } catch {}
   }
-  // Cross-wad indeksi bu rebuild'de bir kez kurulur, tüm skin grupları için
-  // paylaşılır (her seferinde yeniden taramak gereksiz).
+
   const crossWadIndex = buildCrossWadIndex(gameDir)
 
   for (const { name, files } of wadGroups.values()) {
     const gameWadPath = findGameWad(gameDir, name)
     if (!gameWadPath) {
-      warnings.push(`Oyun wad'ı bulunamadı: ${name} — oyun güncel değilse önce League'i güncelleyin`)
+      warnings.push(`Oyun wad'ı bulunamadı: ${name}`)
       continue
     }
     const dest = path.relative(gameDir, gameWadPath)
     const outPath = path.join(overlayDir, dest)
     fs.mkdirSync(path.dirname(outPath), { recursive: true })
-    // Zincirleme merge: her mod bir öncekinin çıktısının üzerine bindirilir
-    let currentBuf = fs.readFileSync(gameWadPath)
+
+    // Stream tabanlı Zincirleme Merge
+    let currentInputPath = gameWadPath
     for (const modFile of files) {
-      const st = mergeWads(currentBuf, fs.readFileSync(modFile), outPath)
+      const st = mergeWads(currentInputPath, modFile, outPath)
       dbgLines.push(
         `[${name}] mod=${path.basename(modFile)} modWAD=v${st.modVersion} baseWAD=v${st.baseVersion} ` +
           `oyunChunk=${st.baseEntries} modChunk=${st.modEntries} override=${st.overriddenChunks} yeni=${st.addedChunks} ` +
           `sıkıştırmaTürleri=${JSON.stringify(st.modTypes)} çıktıBoyut=${st.outSize}`
       )
-      currentBuf = fs.readFileSync(outPath)
+      currentInputPath = outPath
     }
+
     const problems = verifyWadFile(outPath)
     if (problems.length > 0) {
       dbgLines.push(`[${name}] BÜTÜNLÜK SORUNU: ${problems.join('; ')}`)
@@ -525,38 +437,31 @@ function rebuildOverlay(skinIds, gameDir) {
     dbgLines.push(`[${name}] bütünlük kontrolü: OK`)
     mergedCount++
 
-    // Cross-wad dağıtım: modun değiştirdiği hash'lerden herhangi biri
-    // Common/Global/harita wad'ları gibi paylaşılan dosyalarda da varsa,
-    // aynı override'ı oraya da uygula — yoksa oyun gerçek bir maçta o
-    // paylaşılan (değiştirilmemiş) kopyayı okuyup tutarsızlık/çökme yaşar.
+    // Stream tabanlı Cross-wad Dağıtımı
     const modHashes = new Set()
     for (const modFile of files) {
       try {
-        const parsed = parseWad(fs.readFileSync(modFile))
+        const parsed = parseWadHeaderAndToc(modFile)
         for (const e of parsed.entries) modHashes.add(e.hash)
-      } catch {
-        // parse edilemeyen mod dosyası zaten yukarıda normal merge'de de sorun çıkarmıştır
-      }
+      } catch {}
     }
+
     const affectedWads = new Set()
     for (const h of modHashes) {
       const wads = crossWadIndex.get(h)
       if (wads) for (const w of wads) affectedWads.add(w)
     }
-    affectedWads.delete(gameWadPath) // az önce işlendi
+    affectedWads.delete(gameWadPath)
 
     for (const otherWadPath of affectedWads) {
       const otherDest = path.relative(gameDir, otherWadPath)
       const otherOutPath = path.join(overlayDir, otherDest)
       fs.mkdirSync(path.dirname(otherOutPath), { recursive: true })
-      // Başka bir skin grubu bu wad'ı bu rebuild içinde zaten güncellediyse
-      // onun üzerine devam et (overlay'deki en güncel hali kullan)
-      let otherBuf = fs.existsSync(otherOutPath) ? fs.readFileSync(otherOutPath) : fs.readFileSync(otherWadPath)
+
+      let currentOtherInput = fs.existsSync(otherOutPath) ? otherOutPath : otherWadPath
       for (const modFile of files) {
-        // addNew:false → sadece bu wad'da zaten var olan hash'ler geçersiz kılınır;
-        // modun diğer (yeni) chunk'ları paylaşılan büyük wad'lara kopyalanmaz.
-        mergeWads(otherBuf, fs.readFileSync(modFile), otherOutPath, { addNew: false })
-        otherBuf = fs.readFileSync(otherOutPath)
+        mergeWads(currentOtherInput, modFile, otherOutPath, { addNew: false })
+        currentOtherInput = otherOutPath
       }
       warnings.push(`"${name}" paylaşılan varlıkları güncellendi: ${otherDest}`)
     }
@@ -569,18 +474,6 @@ function rebuildOverlay(skinIds, gameDir) {
   }
   return { overlayDir, mergedCount, warnings }
 }
-// ltk_patcher_host.exe'yi başlat. Host CLI argümanlarıyla değil, stdin/stdout
-// satır protokolüyle çalışır:
-//   config prefix <overlayKlasörü>   (birleştirilmiş wad'ların olduğu klasör)
-//   start scan                       (oyun penceresini bekler, hook'lar)
-//   stop                             (patch'i kaldırır ve süreci bitirir)
-// NOT: DLL yolu protokolde verilmiyor — host ltk_patcher_dll.dll'i kendi
-// klasöründen otomatik bulur ("hook dll" komutu yok, unknown keyword hatası verir).
-// Konfigürasyon sırası host'un beklediği sıradadır: loglevel, flags, prefix (ltk-manager ile aynı).
-// loglevel 4096 (All): oyun içi DLL'in log satırlarını da gönderir — teşhis için şart.
-// flags 12 = OPT_OUT_AH_V1 (4) | FULL_WAD_SCAN (8): anti-skinhack wad taraması başarısız
-// olursa engellemek yerine uyarı verir; ayrıca taramayı en başta yapar.
-// prefix sonuna ayraç eklenir (ltk-manager böyle gönderir; DLL doğrudan üstüne ekleme yapar).
 
 function spawnPatcher(overlayDir, settings, skinIds) {
   const child = spawn(settings.patcherPath, [], {
@@ -595,7 +488,6 @@ function spawnPatcher(overlayDir, settings, skinIds) {
     try { child.stdin.write(cmd + '\n') } catch {}
   }
 
-  // Windows yollarını C++ patcher_host için güvenli biçime çevir (düz slash)
   const safeOverlayPath = overlayDir.replace(/\\/g, '/').replace(/\/+$/, '') + '/'
 
   const startupTimers = [
@@ -605,12 +497,10 @@ function spawnPatcher(overlayDir, settings, skinIds) {
     setTimeout(() => sendCmd('start scan'), 700)
   ]
 
-  // Tanı için host çıktılarını log dosyasına yaz
   const logFile = path.join(app.getPath('userData'), 'patcher.log')
-  const appendLog = (s) => { try { fs.appendFileSync(logFile, s) } catch { /* yoksay */ } }
+  const appendLog = (s) => { try { fs.appendFileSync(logFile, s) } catch {} }
   appendLog(`\n=== ${new Date().toISOString()} skins=[${skinIds.join(',')}] overlay=${overlayDir} ===\n`)
 
-  // Hata ve önemli durum satırlarını UI'a ilet
   let stdoutBuf = ''
   child.stdout.on('data', (d) => {
     appendLog(d)
@@ -618,19 +508,20 @@ function spawnPatcher(overlayDir, settings, skinIds) {
     const lines = stdoutBuf.split(/\r?\n/)
     stdoutBuf = lines.pop() || ''
     for (const line of lines) {
-  if (/\bERROR\b/.test(line)) {
-    sendToRenderer('patch-status', { state: 'error', message: line.trim() })
-  } else if (/hook installed|\binjected\b|overlay verified|dll attached/i.test(line)) {
-    sendToRenderer('patch-status', { state: 'started', message: line.trim() })
-  }
-}
+      if (/\bERROR\b/.test(line)) {
+        sendToRenderer('patch-status', { state: 'error', message: line.trim() })
+      } else if (/hook installed|\binjected\b|overlay verified|dll attached/i.test(line)) {
+        sendToRenderer('patch-status', { state: 'started', message: line.trim() })
+      }
+    }
   })
-    child.stopPatcher = () => {
+
+  child.stopPatcher = () => {
     stopped = true
     for (const t of startupTimers) clearTimeout(t)
     sendCmd('stop')
-    setTimeout(() => { try { child.stdin.end() } catch { /* yoksay */ } }, 300)
-    setTimeout(() => { try { child.kill() } catch { /* yoksay */ } }, 3000)
+    setTimeout(() => { try { child.stdin.end() } catch {} }, 300)
+    setTimeout(() => { try { child.kill() } catch {} }, 3000)
   }
 
   child.on('error', (err) => {
@@ -639,8 +530,8 @@ function spawnPatcher(overlayDir, settings, skinIds) {
       sendToRenderer('patch-status', { state: 'error', message: `Başlatılamadı: ${err.message}` })
     }
   })
+
   child.on('exit', (code) => {
-    // Yeniden başlatma sırasında da kapanır; sadece hâlâ kayıtlı süreçse UI'a bildir
     if (patcherProcess === child) {
       patcherProcess = null
       if (code !== 0 && code !== null) {
@@ -652,8 +543,6 @@ function spawnPatcher(overlayDir, settings, skinIds) {
   })
 }
 
-// Overlay'i aktif skinlerle yeniden kur + patcher'ı (tek süreç) yeniden başlat.
-// Aktif skin kalmadıysa patcher'ı durdurur ve overlay'i temizler.
 async function syncPatcher() {
   const skinIds = [...activeSkins]
   stopPatcherProcess()
@@ -669,15 +558,10 @@ async function syncPatcher() {
   }
 
   const check = validatePatcherSettings()
-  if (check.error) {
-    throw new Error(check.error)
-  }
+  if (check.error) throw new Error(check.error)
 
   const { overlayDir: outDir, mergedCount, warnings } = rebuildOverlay(skinIds, check.gameDir)
 
-  // Pipe'ın eski süreç tarafından bırakılması için kısa bekleme — main process'i
-  // 500ms boyunca tamamen dondurmamak için (önceki senkron Atomics.wait) artık
-  // gerçek/engellemeyen bir bekleme kullanılıyor.
   await new Promise((resolve) => setTimeout(resolve, 500))
 
   spawnPatcher(outDir, check.settings, skinIds)
@@ -688,9 +572,7 @@ async function syncPatcher() {
   })
   return { warnings }
 }
-// ==================== SKİN IPC ====================
 
-// İndirilmiş skinlerin listesi (meta bilgisiyle birlikte)
 ipcMain.handle('get-downloaded-skins', () => {
   try {
     const meta = readSkinsMeta()
@@ -705,7 +587,6 @@ ipcMain.handle('get-downloaded-skins', () => {
   }
 })
 
-// Tekil skin indirme (LeagueSkins reposundan - .fantome formatı)
 ipcMain.handle('download-skin', async (_event, { championKey, skinId, meta }) => {
   if (!isValidId(championKey) || !isValidId(skinId)) {
     return { success: false, error: 'Geçersiz şampiyon veya skin ID' }
@@ -717,7 +598,6 @@ ipcMain.handle('download-skin', async (_event, { championKey, skinId, meta }) =>
     await downloadFile(url, dest, (percent) => {
       sendToRenderer('skin-download-progress', { skinId, percent })
     })
-    // Meta bilgisini kaydet (İndirilenler sekmesi için)
     if (meta && typeof meta === 'object') {
       const all = readSkinsMeta()
       all[skinId] = {
@@ -738,8 +618,6 @@ ipcMain.handle('download-skin', async (_event, { championKey, skinId, meta }) =>
   }
 })
 
-// Chroma indirme: chromalar ana skinin alt klasöründe durur.
-//   skins/{championKey}/{skinId}/{chromaId}/{chromaId}.fantome
 ipcMain.handle('download-chroma', async (_event, { championKey, skinId, chromaId, meta }) => {
   if (!isValidId(championKey) || !isValidId(skinId) || !isValidId(chromaId)) {
     return { success: false, error: 'Geçersiz şampiyon, skin veya chroma ID' }
@@ -751,7 +629,6 @@ ipcMain.handle('download-chroma', async (_event, { championKey, skinId, chromaId
     await downloadFile(url, dest, (percent) => {
       sendToRenderer('skin-download-progress', { skinId: chromaId, percent })
     })
-    // Meta bilgisini kaydet (İndirilenler sekmesi için) — isim "Ana skin - Chroma"
     if (meta && typeof meta === 'object') {
       const all = readSkinsMeta()
       all[chromaId] = {
@@ -772,12 +649,6 @@ ipcMain.handle('download-chroma', async (_event, { championKey, skinId, chromaId
   }
 })
 
-// Kullanıcının kendi .fantome/.zip dosyasını seçip içe aktarması. Sadece
-// dosyayı açıp WAD/ klasöründeki *.wad.client isimlerinden hangi
-// şampiyon(lar)a ait olduğunu tespit eder ve SKINS_DIR'a kopyalar — meta
-// bilgisi (isim, şampiyon eşleşmesi) renderer'ın 'save-custom-skin-meta'
-// çağrısıyla ayrıca kaydedilir (renderer champions listesiyle eşleştirme
-// yapabildiği için bu adım orada).
 ipcMain.handle('import-custom-skin', async () => {
   const result = await dialog.showOpenDialog(mainWindow, {
     title: 'Özel skin dosyası seçin (.fantome / .zip)',
@@ -788,7 +659,6 @@ ipcMain.handle('import-custom-skin', async () => {
     return { success: false, canceled: true }
   }
   const srcPath = result.filePaths[0]
-  const fileName = path.basename(srcPath, path.extname(srcPath))
 
   const sevenZip = require('7zip-bin')
   const { execFileSync } = require('child_process')
@@ -800,13 +670,13 @@ ipcMain.handle('import-custom-skin', async () => {
     execFileSync(sevenZip.path7za, ['x', '-y', `-o${tmpExtractDir}`, srcPath], { windowsHide: true })
   } catch (err) {
     fs.rmSync(tmpExtractDir, { recursive: true, force: true })
-    return { success: false, error: 'Dosya açılamadı — geçerli bir .fantome/.zip değil: ' + err.message }
+    return { success: false, error: 'Dosya açılamadı: ' + err.message }
   }
 
   const wadDir = path.join(tmpExtractDir, 'WAD')
   if (!fs.existsSync(wadDir)) {
     fs.rmSync(tmpExtractDir, { recursive: true, force: true })
-    return { success: false, error: 'Dosya içinde bir WAD klasörü bulunamadı — geçerli bir skin modu değil' }
+    return { success: false, error: 'Dosya içinde WAD klasörü bulunamadı' }
   }
   const champFiles = fs.readdirSync(wadDir).filter((f) => /\.wad\.client$/i.test(f))
   fs.rmSync(tmpExtractDir, { recursive: true, force: true })
@@ -816,9 +686,6 @@ ipcMain.handle('import-custom-skin', async () => {
   }
   const detectedChampions = [...new Set(champFiles.map((f) => f.replace(/\.wad\.client$/i, '')))]
 
-  // Gerçek Riot skin/chroma ID'leriyle asla çakışmasın diye 9 ile başlayan,
-  // zaman damgası tabanlı, sadece rakamlardan oluşan bir ID üretiyoruz —
-  // isValidId (sadece \d+) bunu değişiklik yapmadan kabul eder.
   const customId = '9' + Date.now().toString() + Math.floor(100 + Math.random() * 900).toString()
   const dest = path.join(SKINS_DIR, `${customId}.fantome`)
   try {
@@ -828,18 +695,13 @@ ipcMain.handle('import-custom-skin', async () => {
     return { success: false, error: 'Dosya kopyalanamadı: ' + err.message }
   }
 
-  return { success: true, customId, detectedChampions, fileName }
+  return { success: true, customId, detectedChampions, fileName: path.basename(srcPath, path.extname(srcPath)) }
 })
 
-// Şampiyon eşleşmesi renderer'da yapıldıktan sonra meta bilgisini kaydeder.
 ipcMain.handle('save-custom-skin-meta', (_event, { customId, meta }) => {
-  if (!isValidId(customId)) {
-    return { success: false, error: 'Geçersiz ID' }
-  }
+  if (!isValidId(customId)) return { success: false, error: 'Geçersiz ID' }
   const filePath = path.join(SKINS_DIR, `${customId}.fantome`)
-  if (!fs.existsSync(filePath)) {
-    return { success: false, error: 'Skin dosyası bulunamadı — önce import-custom-skin çağrılmalı' }
-  }
+  if (!fs.existsSync(filePath)) return { success: false, error: 'Skin dosyası bulunamadı' }
   const all = readSkinsMeta()
   all[customId] = {
     id: customId,
@@ -855,21 +717,15 @@ ipcMain.handle('save-custom-skin-meta', (_event, { customId, meta }) => {
   return { success: true }
 })
 
-// Skin kaldırma: yerel .fantome dosyasını sil + aktif listeden düş +
-// overlay'i kalan skinlerle güncelle (diğer aktif skinler çalışmaya devam eder)
 ipcMain.handle('remove-skin', async (_event, { skinId }) => {
-  if (!isValidId(skinId)) {
-    return { success: false, error: 'Geçersiz skin ID' }
-  }
+  if (!isValidId(skinId)) return { success: false, error: 'Geçersiz skin ID' }
   const filePath = path.join(SKINS_DIR, `${skinId}.fantome`)
   sendToRenderer('remove-status', { skinId, state: 'started', message: 'Kaldırılıyor...' })
 
   const wasActive = activeSkins.delete(skinId)
 
   try {
-    if (fs.existsSync(filePath)) {
-      fs.unlinkSync(filePath)
-    }
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath)
     const meta = readSkinsMeta()
     if (meta[skinId]) {
       delete meta[skinId]
@@ -880,7 +736,6 @@ ipcMain.handle('remove-skin', async (_event, { skinId }) => {
     return { success: false, error: err.message }
   }
 
-  // Aktif bir skin kaldırıldıysa overlay'i kalan skinlerle yeniden kur
   if (wasActive) {
     try {
       await syncPatcher()
@@ -894,16 +749,13 @@ ipcMain.handle('remove-skin', async (_event, { skinId }) => {
   return { success: true, wasActive }
 })
 
-// ÇOKLU AKTİVASYON: verilen tüm skinleri aktif kümesine ekler ve patcher'ı
-// birleşik overlay ile yeniden başlatır. Zaten aktif olanlar atlanır.
 ipcMain.handle('apply-skins', async (_event, { skinIds }) => {
   if (!Array.isArray(skinIds) || skinIds.length === 0) {
     return { success: false, error: 'Skin seçilmedi' }
   }
   const check = validatePatcherSettings()
-  if (check.error) {
-    return { success: false, error: check.error }
-  }
+  if (check.error) return { success: false, error: check.error }
+
   const missing = []
   const alreadyActive = []
   let added = 0
@@ -919,13 +771,14 @@ ipcMain.handle('apply-skins', async (_event, { skinIds }) => {
     activeSkins.add(id)
     added++
   }
+
   if (added === 0 && activeSkins.size === 0) {
-    return { success: false, error: 'Skin dosyaları bulunamadı. Önce skinleri indirin.' }
+    return { success: false, error: 'Skin dosyaları bulunamadı.' }
   }
   if (added === 0) {
-    // Hepsi zaten aktifti; yeniden merge etmeye gerek yok
     return { success: true, alreadyActive, missing, warnings: [] }
   }
+
   try {
     const { warnings } = await syncPatcher()
     return { success: true, alreadyActive, missing, warnings }
@@ -935,7 +788,6 @@ ipcMain.handle('apply-skins', async (_event, { skinIds }) => {
   }
 })
 
-// Tek skini aktif kümeden çıkar (diğer aktif skinler çalışmaya devam eder)
 ipcMain.handle('deactivate-skin', async (_event, { skinId }) => {
   if (!isValidId(skinId) || !activeSkins.has(skinId)) {
     return { success: false, error: 'Skin zaten aktif değil' }
@@ -946,7 +798,6 @@ ipcMain.handle('deactivate-skin', async (_event, { skinId }) => {
     return { success: true, warnings }
   } catch (err) {
     persistActiveSkins()
-    // Kalan skin yokken de hata oluşabilir (patcher yolu vs.) — durum yine de geçerli
     return { success: true, warnings: [err.message] }
   }
 })
@@ -955,7 +806,6 @@ ipcMain.handle('get-active-skins', () => [...activeSkins])
 
 ipcMain.on('install-update', () => {
   try {
-    const { autoUpdater } = require('electron-updater')
     autoUpdater.quitAndInstall()
   } catch (error) {
     console.error('Güncelleme yüklenirken hata:', error)
@@ -965,7 +815,6 @@ ipcMain.on('install-update', () => {
 app.whenReady().then(() => {
   createWindow()
 
-  // Uygulama açıldığında otomatik güncelleme kontrolü (sadece paketlenmiş sürümde)
   if (app.isPackaged) {
     setTimeout(() => {
       autoUpdater.checkForUpdates().catch((err) => {
@@ -975,19 +824,12 @@ app.whenReady().then(() => {
   }
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow()
-    }
+    if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
-// Uygulama kapanırken çalışan patcher sürecini temizle
-app.on('before-quit', () => {
-  stopPatcherProcess()
-})
+app.on('before-quit', () => stopPatcherProcess())
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  if (process.platform !== 'darwin') app.quit()
 })

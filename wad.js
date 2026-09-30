@@ -1,142 +1,183 @@
 // Riot WAD arşivi okuma ve birleştirme (merge) yardımcıları.
-// League modlamada fantome'deki .wad.client dosyası yalnızca DEĞİŞEN chunk'ları içerir;
-// overlay'e yazılacak dosya = oyunun asıl wad'ının üzerine mod chunk'larının bindirilmiş hali (LTK Manager ile aynı yöntem).
-// Sıkıştırma türüne (raw/gzip/zstd/zstd-multi) bakılmaksızın chunk verisi ham byte olarak kopyalanır.
+// League modlamada fantome'deki .wad.client dosyası yalnızca DEĞİŞEN chunk'ları içerir.
+// RAM kilitlenmesini ve 2 GB Buffer sınırını aşmak için dosyalar diskten 64 KB'lık parçalarla kopyalanır.
 
 const fs = require('fs')
 
 const WAD_MAGIC = 0x5752 // 'RW'
 const TOC_ENTRY_SIZE = 32
+const CHUNK_READ_BUF_SIZE = 64 * 1024 // 64 KB parçalı kopyalama tamponu
 
-// WAD arşiv başlığını ve chunk tablosunu parse eder.
-// Düzen (LeagueToolkit v3): magic(2) + major(1) + minor(1) + signature(256) +
-// checksum(8) + chunkCount(4), ardından hemen TOC gelir — her kayıt 32 bayt:
-// pathHash(8) dataOffset(4) compressedSize(4) size(4) tail(12: type+frame+start+checksum).
-function parseWad(buf) {
-  if (buf.length < 4 + 256 + 12 || buf.readUInt16LE(0) !== WAD_MAGIC) {
-    throw new Error('Geçersiz WAD dosyası (magic bulunamadı)')
-  }
-  const major = buf[2]
-  const minor = buf[3]
-  if (major < 3) {
-    throw new Error(`Desteklenmeyen WAD sürümü: ${major}.${minor}`)
-  }
-  const signature = buf.subarray(4, 4 + 256)
-  const checksum = buf.subarray(260, 268)
-  const entryCount = buf.readUInt32LE(268)
-  const headerLen = 272
-  const tocLen = entryCount * TOC_ENTRY_SIZE
-  if (buf.length < headerLen + tocLen) {
-    throw new Error('Bozuk WAD: chunk tablosu dosya sonunu aşıyor')
-  }
+// Sadece Header + TOC kısmını okur (Tüm dosyayı RAM'e yüklemez)
+function parseWadHeaderAndToc(filePath) {
+  const fd = fs.openSync(filePath, 'r')
+  try {
+    const headerBuf = Buffer.alloc(272)
+    const readHeader = fs.readSync(fd, headerBuf, 0, 272, 0)
+    if (readHeader < 272 || headerBuf.readUInt16LE(0) !== WAD_MAGIC) {
+      throw new Error('Geçersiz WAD dosyası (magic bulunamadı)')
+    }
+    const major = headerBuf[2]
+    const minor = headerBuf[3]
+    if (major < 3) {
+      throw new Error(`Desteklenmeyen WAD sürümü: ${major}.${minor}`)
+    }
+    const signature = Buffer.from(headerBuf.subarray(4, 260))
+    const checksum = Buffer.from(headerBuf.subarray(260, 268))
+    const entryCount = headerBuf.readUInt32LE(268)
+    const tocLen = entryCount * TOC_ENTRY_SIZE
 
-  const entries = []
-  let p = headerLen
-  for (let i = 0; i < entryCount; i++) {
-    entries.push({
-      hash: buf.readBigUInt64LE(p),
-      dataOffset: buf.readUInt32LE(p + 8),
-      compressedSize: buf.readUInt32LE(p + 12),
-      size: buf.readUInt32LE(p + 16),
-      // entry'nin geri kalan 12 baytı (sıkıştırma türü, subchunk bilgisi, checksum) aynen korunur
-      tail: Buffer.from(buf.subarray(p + 20, p + 32))
-    })
-    p += TOC_ENTRY_SIZE
+    const tocBuf = Buffer.alloc(tocLen)
+    const readToc = fs.readSync(fd, tocBuf, 0, tocLen, 272)
+    if (readToc < tocLen) {
+      throw new Error('Bozuk WAD: chunk tablosu dosya sonunu aşıyor')
+    }
+
+    const entries = []
+    let p = 0
+    for (let i = 0; i < entryCount; i++) {
+      entries.push({
+        hash: tocBuf.readBigUInt64LE(p),
+        dataOffset: tocBuf.readUInt32LE(p + 8),
+        compressedSize: tocBuf.readUInt32LE(p + 12),
+        size: tocBuf.readUInt32LE(p + 16),
+        tail: Buffer.from(tocBuf.subarray(p + 20, p + 32))
+      })
+      p += TOC_ENTRY_SIZE
+    }
+    return { major, minor, signature, checksum, entries }
+  } finally {
+    fs.closeSync(fd)
   }
-  return { major, minor, signature, checksum, headerLen, buf, entries }
 }
 
-// BASE_WAD_PLACEHOLDER
-// options.addNew = false → mod'un oyunda OLMAYAN chunk'ları eklenmez, yalnızca
-// oyunda zaten var olan hash'ler geçersiz kılınır. Cross-wad dağıtımında
-// (Common/Global/harita wad'ları) bu şart: aksi halde büyük bir modun tüm
-// içeriği paylaşılan büyük wad'ların içine de kopyalanır.
-function mergeWads(baseBuf, modBuf, outPath, options = {}) {
+// Dosya yolları üzerinden sıfır RAM yüküyle WAD birleştirir
+function mergeWads(basePath, modPath, outPath, options = {}) {
   const addNew = options.addNew !== false
-  const base = parseWad(baseBuf)
-  const mod = parseWad(modBuf)
 
+  const base = parseWadHeaderAndToc(basePath)
+  const mod = parseWadHeaderAndToc(modPath)
+
+  // Mod dosyaları küçük olduğu için mod chunk'ları RAM'e alınır
+  const modFd = fs.openSync(modPath, 'r')
   const modByHash = new Map()
-  for (const e of mod.entries) modByHash.set(e.hash, e)
+
+  try {
+    for (const e of mod.entries) {
+      const chunkBuf = Buffer.alloc(e.compressedSize)
+      fs.readSync(modFd, chunkBuf, 0, e.compressedSize, e.dataOffset)
+      modByHash.set(e.hash, {
+        hash: e.hash,
+        compressedSize: e.compressedSize,
+        size: e.size,
+        tail: e.tail,
+        data: chunkBuf
+      })
+    }
+  } finally {
+    fs.closeSync(modFd)
+  }
 
   const outEntries = []
 
-  const addEntry = (e, srcBuf) => {
-    const data = srcBuf.subarray(e.dataOffset, e.dataOffset + e.compressedSize)
-    if (data.length !== e.compressedSize) {
-      throw new Error('WAD chunk verisi eksik (bozuk arşiv)')
-    }
-    outEntries.push({
-      hash: e.hash,
-      dataOffset: 0, // sıralamadan sonra hesaplanır
-      compressedSize: e.compressedSize,
-      size: e.size,
-      tail: e.tail,
-      data: Buffer.from(data) // ham (muhtemelen sıkıştırılmış) chunk verisi
-    })
-  }
-
-  // 1) Oyunun tüm chunk'ları: mod bunu geçersiz kılıyorsa mod'unkini, yoksa orijinali al
+  // 1) Oyunun chunk'ları: Orijinal chunk verileri RAM'e kopyalanmaz, sadece disk konumu tutulur
   for (const e of base.entries) {
     const override = modByHash.get(e.hash)
     if (override) {
-      modByHash.delete(e.hash) // kullanıldığını işaretle
-      addEntry(override, mod.buf)
+      modByHash.delete(e.hash)
+      outEntries.push(override)
     } else {
-      addEntry(e, base.buf)
+      outEntries.push({
+        hash: e.hash,
+        compressedSize: e.compressedSize,
+        size: e.size,
+        tail: e.tail,
+        srcOffset: e.dataOffset
+      })
     }
   }
-  // 2) Mod'un kendi eklediği ve oyunda olmayan chunk'lar
+
+  // 2) Mod'un eklediği yeni chunk'lar
   if (addNew) {
-    for (const e of modByHash.values()) addEntry(e, mod.buf)
+    for (const override of modByHash.values()) {
+      outEntries.push(override)
+    }
   }
 
-  // Çıktı düzeni: header (272B, base'in imzası/checksum'ı korunur) + TOC + chunk verisi.
-  // League chunk tablosunun path_hash sıralı olmasını zorunlu tutar.
+  // Path hash sıralaması (League zorunluluğu)
   outEntries.sort((a, b) => (a.hash < b.hash ? -1 : a.hash > b.hash ? 1 : 0))
 
   const headerLen = 272
   const tocLen = outEntries.length * TOC_ENTRY_SIZE
   const dataStart = headerLen + tocLen
 
-  // Sıralandıktan sonra her entry'nin veri konumunu hesapla
   let pos = 0
   for (const e of outEntries) {
-    e.dataOffset = dataStart + pos
-    pos += e.data.length
+    e.outOffset = dataStart + pos
+    pos += e.compressedSize
   }
-  // WAD'da dataOffset 32-bit — 4 GiB'ı aşarsa offset'ler taşar ve dosya bozulur
+
   if (dataStart + pos > 0xffffffff) {
-    throw new Error('Birleştirilmiş WAD 4 GB sınırını aşıyor (mod çok büyük olabilir)')
+    throw new Error('Birleştirilmiş WAD 4 GB sınırını aşıyor (32-bit offset sınırı)')
   }
 
-  const header = Buffer.alloc(headerLen)
-  header.writeUInt16LE(WAD_MAGIC, 0)
-  header[2] = base.major
-  header[3] = base.minor
-  base.signature.copy(header, 4)
-  base.checksum.copy(header, 260)
-  header.writeUInt32LE(outEntries.length, 268)
+  // Çıktı dosyasını diske parça parça kopyalama
+  const outFd = fs.openSync(outPath, 'w')
+  const baseFd = fs.openSync(basePath, 'r')
 
-  const toc = Buffer.alloc(tocLen)
-  let t = 0
-  for (const e of outEntries) {
-    toc.writeBigUInt64LE(e.hash, t)
-    toc.writeUInt32LE(e.dataOffset, t + 8)
-    toc.writeUInt32LE(e.compressedSize, t + 12)
-    toc.writeUInt32LE(e.size, t + 16)
-    e.tail.copy(toc, t + 20)
-    t += TOC_ENTRY_SIZE
+  try {
+    // Header
+    const header = Buffer.alloc(headerLen)
+    header.writeUInt16LE(WAD_MAGIC, 0)
+    header[2] = base.major
+    header[3] = base.minor
+    base.signature.copy(header, 4)
+    base.checksum.copy(header, 260)
+    header.writeUInt32LE(outEntries.length, 268)
+    fs.writeSync(outFd, header, 0, headerLen)
+
+    // TOC
+    const toc = Buffer.alloc(tocLen)
+    let t = 0
+    for (const e of outEntries) {
+      toc.writeBigUInt64LE(e.hash, t)
+      toc.writeUInt32LE(e.outOffset, t + 8)
+      toc.writeUInt32LE(e.compressedSize, t + 12)
+      toc.writeUInt32LE(e.size, t + 16)
+      e.tail.copy(toc, t + 20)
+      t += TOC_ENTRY_SIZE
+    }
+    fs.writeSync(outFd, toc, 0, tocLen)
+
+    // Chunk Verisi (Parçalı Aktarım)
+    const copyBuf = Buffer.alloc(CHUNK_READ_BUF_SIZE)
+    for (const e of outEntries) {
+      if (e.data) {
+        fs.writeSync(outFd, e.data, 0, e.compressedSize)
+      } else {
+        let remaining = e.compressedSize
+        let readPos = e.srcOffset
+        while (remaining > 0) {
+          const toRead = Math.min(remaining, CHUNK_READ_BUF_SIZE)
+          const bytesRead = fs.readSync(baseFd, copyBuf, 0, toRead, readPos)
+          if (bytesRead === 0) break
+          fs.writeSync(outFd, copyBuf, 0, bytesRead)
+          readPos += bytesRead
+          remaining -= bytesRead
+        }
+      }
+    }
+  } finally {
+    fs.closeSync(outFd)
+    fs.closeSync(baseFd)
   }
 
-  fs.writeFileSync(outPath, Buffer.concat([header, toc, ...outEntries.map((e) => e.data)]))
-
-  // Tanı bilgisi: mod'un WAD sürümü ve sıkıştırma türü dağılımı (tail[0] alt 4 bit = tür)
   const modTypes = {}
   for (const e of mod.entries) {
     const t = e.tail[0] & 0x0f
     modTypes[t] = (modTypes[t] || 0) + 1
   }
+
   return {
     entryCount: outEntries.length,
     overriddenChunks: mod.entries.length - modByHash.size,
@@ -150,9 +191,6 @@ function mergeWads(baseBuf, modBuf, outPath, options = {}) {
   }
 }
 
-// Yazılan WAD'ın yapısal bütünlüğünü kontrol eder (yalnızca header + TOC okunur):
-// hash'ler kesin artan sırada mı, her chunk dosya sınırları içinde mi, header'daki
-// chunk sayısı dosya boyutuyla tutarlı mı. Sorun listesi döner (boşsa sağlam).
 function verifyWadFile(filePath) {
   const problems = []
   const size = fs.statSync(filePath).size
@@ -183,10 +221,6 @@ function verifyWadFile(filePath) {
   return problems
 }
 
-// Sadece header + TOC okuyup chunk hash'lerini döner (veri kısmını okumaz).
-// Cross-wad indeksleme için kullanılır — Map11/Common/Global gibi büyük
-// (yüzlerce MB) wad'ların tamamını hafızaya almadan hangi hash'leri
-// içerdiklerini öğrenmemizi sağlar.
 function readWadHashes(filePath) {
   const fd = fs.openSync(filePath, 'r')
   try {
@@ -207,4 +241,4 @@ function readWadHashes(filePath) {
   }
 }
 
-module.exports = { parseWad, mergeWads, readWadHashes, verifyWadFile }
+module.exports = { parseWadHeaderAndToc, mergeWads, readWadHashes, verifyWadFile }
