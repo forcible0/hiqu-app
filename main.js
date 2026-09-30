@@ -4,7 +4,7 @@ const { spawn } = require('child_process')
 const https = require('https')
 const fs = require('fs')
 const path = require('path')
-const { mergeWads, parseWadHeaderAndToc, readWadHashes, verifyWadFile } = require('./wad.js')
+const { mergeWads, verifyWadFile } = require('./wad.js')
 
 let mainWindow = null
 
@@ -212,9 +212,6 @@ ipcMain.handle('save-settings', (_event, settings) => {
   const current = readSettings()
   const merged = { ...current, ...settings, activeSkins: [...activeSkins] }
   const ok = writeSettings(merged)
-  if (ok && settings && settings.gamePath && settings.gamePath !== current.gamePath) {
-    invalidateCrossWadIndexCache()
-  }
   return { success: ok, error: ok ? undefined : 'Ayarlar dosyaya yazılamadı' }
 })
 
@@ -289,56 +286,6 @@ function findGameWad(gameDir, wadName) {
   return findInGame(gameDir, 0)
 }
 
-let _crossWadIndexCache = null
-let _crossWadIndexCacheDir = null
-
-function invalidateCrossWadIndexCache() {
-  _crossWadIndexCache = null
-  _crossWadIndexCacheDir = null
-}
-
-function buildCrossWadIndex(gameDir) {
-  if (_crossWadIndexCache && _crossWadIndexCacheDir === gameDir) {
-    return _crossWadIndexCache
-  }
-  const candidates = []
-  const championsDir = path.join(gameDir, 'DATA', 'FINAL', 'Champions')
-  if (fs.existsSync(championsDir)) {
-    for (const f of fs.readdirSync(championsDir)) {
-      if (/\.wad\.client$/i.test(f)) candidates.push(path.join(championsDir, f))
-    }
-  }
-  const mapsShippingDir = path.join(gameDir, 'DATA', 'FINAL', 'Maps', 'Shipping')
-  if (fs.existsSync(mapsShippingDir)) {
-    for (const f of fs.readdirSync(mapsShippingDir)) {
-      if (/\.wad\.client$/i.test(f)) candidates.push(path.join(mapsShippingDir, f))
-    }
-  }
-  const globalWad = path.join(gameDir, 'DATA', 'FINAL', 'Global.wad.client')
-  if (fs.existsSync(globalWad)) candidates.push(globalWad)
-
-  const index = new Map()
-  for (const wadPath of candidates) {
-    let hashes
-    try {
-      hashes = readWadHashes(wadPath)
-    } catch {
-      continue
-    }
-    for (const h of hashes) {
-      let set = index.get(h)
-      if (!set) {
-        set = new Set()
-        index.set(h, set)
-      }
-      set.add(wadPath)
-    }
-  }
-  _crossWadIndexCache = index
-  _crossWadIndexCacheDir = gameDir
-  return index
-}
-
 function rebuildOverlay(skinIds, gameDir) {
   const overlayDir = path.join(app.getPath('userData'), 'overlay')
   const extractDir = path.join(app.getPath('userData'), 'overlay_extract')
@@ -404,8 +351,6 @@ function rebuildOverlay(skinIds, gameDir) {
     } catch {}
   }
 
-  const crossWadIndex = buildCrossWadIndex(gameDir)
-
   for (const { name, files } of wadGroups.values()) {
     const gameWadPath = findGameWad(gameDir, name)
     if (!gameWadPath) {
@@ -436,35 +381,6 @@ function rebuildOverlay(skinIds, gameDir) {
     }
     dbgLines.push(`[${name}] bütünlük kontrolü: OK`)
     mergedCount++
-
-    // Stream tabanlı Cross-wad Dağıtımı
-    const modHashes = new Set()
-    for (const modFile of files) {
-      try {
-        const parsed = parseWadHeaderAndToc(modFile)
-        for (const e of parsed.entries) modHashes.add(e.hash)
-      } catch {}
-    }
-
-    const affectedWads = new Set()
-    for (const h of modHashes) {
-      const wads = crossWadIndex.get(h)
-      if (wads) for (const w of wads) affectedWads.add(w)
-    }
-    affectedWads.delete(gameWadPath)
-
-    for (const otherWadPath of affectedWads) {
-      const otherDest = path.relative(gameDir, otherWadPath)
-      const otherOutPath = path.join(overlayDir, otherDest)
-      fs.mkdirSync(path.dirname(otherOutPath), { recursive: true })
-
-      let currentOtherInput = fs.existsSync(otherOutPath) ? otherOutPath : otherWadPath
-      for (const modFile of files) {
-        mergeWads(currentOtherInput, modFile, otherOutPath, { addNew: false })
-        currentOtherInput = otherOutPath
-      }
-      warnings.push(`"${name}" paylaşılan varlıkları güncellendi: ${otherDest}`)
-    }
   }
 
   dbgLines.push(...warnings.map((w) => `UYARI: ${w}`))
