@@ -1,0 +1,1190 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = App;
+const jsx_runtime_1 = require("react/jsx-runtime");
+const react_1 = require("react");
+const api_1 = require("./api");
+const Sidebar_1 = __importDefault(require("./components/Sidebar"));
+const SkinCard_1 = __importDefault(require("./components/SkinCard"));
+const SkinModal_1 = __importDefault(require("./components/SkinModal"));
+const QueueBar_1 = __importDefault(require("./components/QueueBar"));
+const Toasts_1 = __importDefault(require("./components/Toasts"));
+const PartyModal_1 = __importDefault(require("./components/PartyModal"));
+const party_1 = require("./party");
+const lucide_react_1 = require("lucide-react");
+const FAVORITES_KEY = 'buck_favorites';
+const QUEUE_KEY = 'buck_queue';
+function loadJson(key, fallback) {
+    try {
+        const raw = localStorage.getItem(key);
+        if (!raw)
+            return fallback;
+        const parsed = JSON.parse(raw);
+        return parsed && (Array.isArray(parsed) || typeof parsed === 'object') ? parsed : fallback;
+    }
+    catch {
+        return fallback;
+    }
+}
+// Şampiyon ID'lerini dosya adlarına map etme fonksiyonu
+function getChampionImageFilename(championId) {
+    if (!championId)
+        return '';
+    const mapping = {
+        'Aatrox': 'aatrox',
+        'Ahri': 'ahri',
+        'Akali': 'akali',
+        'Akshan': 'akshan',
+        'Alistar': 'alistar',
+        'Ambessa': 'ambessa',
+        'Amumu': 'amumu',
+        'Anivia': 'anivia',
+        'Annie': 'annie',
+        'Aphelios': 'aphelios',
+        'Ashe': 'ashe',
+        'AurelionSol': 'aurelionsol',
+        'Aurora': 'aurora',
+        'Azir': 'azir',
+        'Bard': 'bard',
+        'Belveth': 'belveth',
+        'Blitzcrank': 'blitzcrank',
+        'Brand': 'brand',
+        'Braum': 'braum',
+        'Briar': 'briar',
+        'Caitlyn': 'caitlyn',
+        'Camille': 'camille',
+        'Cassiopeia': 'cassiopeia',
+        'Chogath': 'chogath',
+        'Corki': 'corki',
+        'Darius': 'darius',
+        'Diana': 'diana',
+        'DrMundo': 'drmundo',
+        'Draven': 'draven',
+        'Ekko': 'ekko',
+        'Elise': 'elise',
+        'Evelynn': 'evelynn',
+        'Ezreal': 'ezreal',
+        'Fiddlesticks': 'fiddlesticks',
+        'Fiora': 'fiora',
+        'Fizz': 'fizz',
+        'Galio': 'galio',
+        'Gangplank': 'gangplank',
+        'Garen': 'garen',
+        'Gnar': 'gnar',
+        'Gragas': 'gragas',
+        'Graves': 'graves',
+        'Gwen': 'gwen',
+        'Hecarim': 'hecarim',
+        'Heimerdinger': 'heimerdinger',
+        'Hwei': 'hwei',
+        'Illaoi': 'illaoi',
+        'Irelia': 'irelia',
+        'Ivern': 'ivern',
+        'Janna': 'janna',
+        'JarvanIV': 'jarvaniv',
+        'Jax': 'jax',
+        'Jayce': 'jayce',
+        'Jhin': 'jhin',
+        'Jinx': 'jinx',
+        'KSante': 'ksante',
+        'Kaisa': 'kaisa',
+        'Kalista': 'kalista',
+        'Karma': 'karma',
+        'Karthus': 'karthus',
+        'Kassadin': 'kassadin',
+        'Katarina': 'katarina',
+        'Kayle': 'kayle',
+        'Kayn': 'kayn',
+        'Kennen': 'kennen',
+        'KhaZix': 'khazix',
+        'Kindred': 'kindred',
+        'Kled': 'kled',
+        'KogMaw': 'kogmaw',
+        'LeBlanc': 'leblanc',
+        'LeeSin': 'leesin',
+        'Leona': 'leona',
+        'Lillia': 'lillia',
+        'Lissandra': 'lissandra',
+        'Locke': 'locke',
+        'Lucian': 'lucian',
+        'Lulu': 'lulu',
+        'Lux': 'lux',
+        'Malphite': 'malphite',
+        'Malzahar': 'malzahar',
+        'Maokai': 'maokai',
+        'MasterYi': 'masteryi',
+        'Mel': 'mel',
+        'Milio': 'milio',
+        'MissFortune': 'missfortune',
+        'Mordekaiser': 'mordekaiser',
+        'Morgana': 'morgana',
+        'Naafiri': 'naafiri',
+        'Nami': 'nami',
+        'Nasus': 'nasus',
+        'Nautilus': 'nautilus',
+        'Neeko': 'neeko',
+        'Nidalee': 'nidalee',
+        'Nilah': 'nilah',
+        'Nocturne': 'nocturne',
+        'Nunu': 'nunu',
+        'Olaf': 'olaf',
+        'Orianna': 'orianna',
+        'Ornn': 'ornn',
+        'Pantheon': 'pantheon',
+        'Poppy': 'poppy',
+        'Pyke': 'pyke',
+        'Qiyana': 'qiyana',
+        'Quinn': 'quinn',
+        'Rakan': 'rakan',
+        'Rammus': 'rammus',
+        'RekSai': 'reksai',
+        'Rell': 'rell',
+        'Renata': 'renata',
+        'Renekton': 'renekton',
+        'Rengar': 'rengar',
+        'Riven': 'riven',
+        'Rumble': 'rumble',
+        'Ryze': 'ryze',
+        'Samira': 'samira',
+        'Sejuani': 'sejuani',
+        'Senna': 'senna',
+        'Seraphine': 'seraphine',
+        'Sett': 'sett',
+        'Shaco': 'shaco',
+        'Shen': 'shen',
+        'Shyvana': 'shyvana',
+        'Singed': 'singed',
+        'Sion': 'sion',
+        'Sivir': 'sivir',
+        'Skarner': 'skarner',
+        'Smolder': 'smolder',
+        'Sona': 'sona',
+        'Soraka': 'soraka',
+        'Swain': 'swain',
+        'Sylas': 'sylas',
+        'Syndra': 'syndra',
+        'TahmKench': 'tahmkench',
+        'Taliyah': 'taliyah',
+        'Talon': 'talon',
+        'Taric': 'taric',
+        'Teemo': 'teemo',
+        'Thresh': 'thresh',
+        'Tristana': 'tristana',
+        'Trundle': 'trundle',
+        'Tryndamere': 'tryndamere',
+        'TwistedFate': 'twistedfate',
+        'Twitch': 'twitch',
+        'Udyr': 'udyr',
+        'Urgot': 'urgot',
+        'Varus': 'varus',
+        'Vayne': 'vayne',
+        'Veigar': 'veigar',
+        'VelKoz': 'velkoz',
+        'Vex': 'vex',
+        'Vi': 'vi',
+        'Viego': 'viego',
+        'Viktor': 'viktor',
+        'Vladimir': 'vladimir',
+        'Volibear': 'volibear',
+        'Warwick': 'warwick',
+        'Wukong': 'wukong',
+        'Xayah': 'xayah',
+        'Xerath': 'xerath',
+        'XinZhao': 'xinzhao',
+        'Yasuo': 'yasuo',
+        'Yone': 'yone',
+        'Yorick': 'yorick',
+        'Yunara': 'yunara',
+        'Yuumi': 'yuumi',
+        'Zaahen': 'zaahen',
+        'Zac': 'zac',
+        'Zed': 'zed',
+        'Zeri': 'zeri',
+        'Ziggs': 'ziggs',
+        'Zilean': 'zilean',
+        'Zoe': 'zoe',
+        'Zyra': 'zyra',
+    };
+    return mapping[championId] || championId.toLowerCase().replace(/[^a-z]/g, '');
+}
+// League of Legends resmi sitesine göre tahmini pozisyon değerleri
+const CHAMPION_POSITIONS = {
+    'Aatrox': '75% center',
+    'Ahri': '70% center',
+    'Akali': '45% center',
+    'Akshan': '65% center',
+    'Alistar': '65% center',
+    'Amumu': '70% center',
+    'Anivia': '65% center',
+    'Annie': '95% center',
+    'Aphelios': '50% center',
+    'Ashe': '85% center',
+    'AurelionSol': '50% center',
+    'Azir': '80% center',
+    'Bard': '65% center',
+    'Belveth': '50% center',
+    'Blitzcrank': '70% center',
+    'Brand': '90% center',
+    'Braum': '80% center',
+    'Briar': '65% center',
+    'Caitlyn': '90% center',
+    'Camille': '90% center',
+    'Cassiopeia': '85% center',
+    'Chogath': '80% center',
+    'Corki': '85% center',
+    'Darius': '65% center',
+    'Diana': '85% center',
+    'DrMundo': '50% center',
+    'Draven': '95% center',
+    'Ekko': '90% center',
+    'Elise': '90% center',
+    'Evelynn': '50% center',
+    'Ezreal': '80% center',
+    'Fiddlesticks': '25% center',
+    'Fiora': '85% center',
+    'Fizz': '90% center',
+    'Galio': '40% center',
+    'Gangplank': '80% center',
+    'Garen': '90% center',
+    'Gnar': '90% center',
+    'Gragas': '80% center',
+    'Graves': '85% center',
+    'Gwen': '50% center',
+    'Hecarim': '65% center',
+    'Heimerdinger': '80% center',
+    'Illaoi': '70% center',
+    'Irelia': '50% center',
+    'Ivern': '50% center',
+    'Janna': '90% center',
+    'JarvanIV': '85% center',
+    'Jax': '70% center',
+    'Jayce': '85% center',
+    'Jhin': '55% center',
+    'Jinx': '90% center',
+    'Kaisa': '30% center',
+    'Kalista': '80% center',
+    'Karma': '90% center',
+    'Karthus': '80% center',
+    'Kassadin': '80% center',
+    'Katarina': '80% center',
+    'Kayle': '95% center',
+    'Kayn': '50% center',
+    'Kennen': '80% center',
+    'KhaZix': '60% center',
+    'Kindred': '50% center',
+    'Kled': '90% center',
+    'KogMaw': '85% center',
+    'LeBlanc': '50% center',
+    'LeeSin': '80% center',
+    'Leona': '95% center',
+    'Lillia': '30% center',
+    'Locke': '70% center',
+    'Lissandra': '80% center',
+    'Lucian': '90% center',
+    'Lulu': '80% center',
+    'Lux': '70% center',
+    'Malphite': '80% center',
+    'Malzahar': '70% center',
+    'Maokai': '80% center',
+    'MasterYi': '90% center',
+    'Mel': '40% center',
+    'Milio': '70% center',
+    'MissFortune': '90% center',
+    'Mordekaiser': '50% center',
+    'Morgana': '95% center',
+    'Naafiri': '30% center',
+    'Nami': '90% center',
+    'Nasus': '80% center',
+    'Nautilus': '85% center',
+    'Neeko': '50% center',
+    'Nidalee': '90% center',
+    'Nilah': '80% center',
+    'Nocturne': '80% center',
+    'Nunu': '80% center',
+    'Olaf': '75% center',
+    'Orianna': '80% center',
+    'Ornn': '50% center',
+    'Pantheon': '50% center',
+    'Poppy': '70% center',
+    'Pyke': '50% center',
+    'Qiyana': '50% center',
+    'Quinn': '70% center',
+    'Rakan': '60% center',
+    'Rammus': '80% center',
+    'RekSai': '70% center',
+    'Rell': '50% center',
+    'Renata': '70% center',
+    'Renekton': '70% center',
+    'Rengar': '80% center',
+    'Riven': '80% center',
+    'Rumble': '80% center',
+    'Ryze': '80% center',
+    'Samira': '60% center',
+    'Sejuani': '60% center',
+    'Senna': '60% center',
+    'Seraphine': '50% center',
+    'Sett': '50% center',
+    'Shaco': '90% center',
+    'Shen': '80% center',
+    'Shyvana': '50% center',
+    'Singed': '70% center',
+    'Sion': '80% center',
+    'Sivir': '50% center',
+    'Skarner': '50% center',
+    'Smolder': '50% center',
+    'Sona': '80% center',
+    'Soraka': '70% center',
+    'Swain': '80% center',
+    'Sylas': '50% center',
+    'Syndra': '50% center',
+    'TahmKench': '80% center',
+    'Taliyah': '80% center',
+    'Talon': '70% center',
+    'Taric': '90% center',
+    'Teemo': '60% center',
+    'Thresh': '70% center',
+    'Tristana': '70% center',
+    'Trundle': '70% center',
+    'Tryndamere': '70% center',
+    'TwistedFate': '85% center',
+    'Twitch': '50% center',
+    'Udyr': '50% center',
+    'Urgot': '60% center',
+    'Varus': '50% center',
+    'Vayne': '80% center',
+    'Veigar': '60% center',
+    'VelKoz': '70% center',
+    'Vex': '70% center',
+    'Vi': '80% center',
+    'Viego': '70% center',
+    'Viktor': '50% center',
+    'Vladimir': '70% center',
+    'Volibear': '70% center',
+    'Warwick': '70% center',
+    'Wukong': '95% center',
+    'Xayah': '75% center',
+    'Xerath': '60% center',
+    'XinZhao': '60% center',
+    'Yasuo': '95% center',
+    'Yone': '70% center',
+    'Yorick': '80% center',
+    'Yunara': '70% center',
+    'Yuumi': '40% center',
+    'Zac': '70% center',
+    'Zed': '80% center',
+    'Zeri': '50% center',
+    'Ziggs': '85% center',
+    'Zilean': '50% center',
+    'Zoe': '50% center',
+    'Zyra': '85% center',
+};
+function App() {
+    // Şampiyon verisi
+    const [champions, setChampions] = (0, react_1.useState)([]);
+    const [selectedChampion, setSelectedChampion] = (0, react_1.useState)(null);
+    const [championSkins, setChampionSkins] = (0, react_1.useState)([]);
+    const [loadingChampions, setLoadingChampions] = (0, react_1.useState)(true);
+    const [loadingSkins, setLoadingSkins] = (0, react_1.useState)(false);
+    // Sekmeler + arama
+    const [tab, setTab] = (0, react_1.useState)('champions');
+    const [search, setSearch] = (0, react_1.useState)('');
+    // Skin koleksiyonları (kalıcı: localStorage / main process)
+    const [favorites, setFavorites] = (0, react_1.useState)(() => loadJson(FAVORITES_KEY, []));
+    const [queue, setQueue] = (0, react_1.useState)(() => loadJson(QUEUE_KEY, []));
+    const [downloadedMetas, setDownloadedMetas] = (0, react_1.useState)([]);
+    const [activeSkins, setActiveSkins] = (0, react_1.useState)([]);
+    // Devam eden işlemler
+    const [downloading, setDownloading] = (0, react_1.useState)(new Set());
+    const [downloadProgress, setDownloadProgress] = (0, react_1.useState)({});
+    const [applyingIds, setApplyingIds] = (0, react_1.useState)(new Set());
+    const [removingIds, setRemovingIds] = (0, react_1.useState)(new Set());
+    const [isPatching, setIsPatching] = (0, react_1.useState)(false);
+    const [patchProgress, setPatchProgress] = (0, react_1.useState)('');
+    const [patcherRunning, setPatcherRunning] = (0, react_1.useState)(false);
+    // Modal
+    const [modalMeta, setModalMeta] = (0, react_1.useState)(null);
+    const [modalChromas, setModalChromas] = (0, react_1.useState)([]);
+    const [loadingChromas, setLoadingChromas] = (0, react_1.useState)(false);
+    const [selectedChromaId, setSelectedChromaId] = (0, react_1.useState)(null);
+    const [showPartyModal, setShowPartyModal] = (0, react_1.useState)(false);
+    const [partyRoomCode, setPartyRoomCode] = (0, react_1.useState)((0, party_1.getSavedRoomCode)());
+    const [partyMembers, setPartyMembers] = (0, react_1.useState)([]);
+    // Ayarlar & güncelleme
+    const [settings, setSettings] = (0, react_1.useState)({});
+    const [appVersion, setAppVersion] = (0, react_1.useState)('');
+    const [updateAvailable, setUpdateAvailable] = (0, react_1.useState)(false);
+    const [updateDownloaded, setUpdateDownloaded] = (0, react_1.useState)(false);
+    const [checkingUpdate, setCheckingUpdate] = (0, react_1.useState)(false);
+    const [toasts, setToasts] = (0, react_1.useState)([]);
+    const toastId = (0, react_1.useRef)(0);
+    // Multi-select mode for downloaded tab
+    const [selectionMode, setSelectionMode] = (0, react_1.useState)(false);
+    const [selectedIds, setSelectedIds] = (0, react_1.useState)(new Set());
+    const addToast = (type, message) => {
+        const id = ++toastId.current;
+        setToasts((prev) => [...prev, { id, type, message }]);
+        window.setTimeout(() => setToasts((prev) => prev.filter((t) => t.id !== id)), 4000);
+    };
+    // Multi-select handlers
+    const toggleSelection = (id) => {
+        setSelectedIds((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) {
+                next.delete(id);
+            }
+            else {
+                next.add(id);
+            }
+            return next;
+        });
+    };
+    const handleDeleteAllDownloaded = async () => {
+        if (!window.electronAPI)
+            return;
+        if (downloadedMetas.length === 0) {
+            addToast('info', 'İndirilen skin yok');
+            return;
+        }
+        for (const meta of downloadedMetas) {
+            const res = await window.electronAPI.removeSkin({ skinId: meta.id });
+            if (!res.success) {
+                addToast('error', `"${meta.name}" silinemedi: ${res.error || 'Bilinmeyen hata'}`);
+            }
+            else {
+                maybeBroadcastRemoval(meta);
+            }
+        }
+        addToast('success', 'İndirilenler silindi');
+        refreshDownloaded();
+    };
+    const handleDeleteSelected = async () => {
+        if (!window.electronAPI)
+            return;
+        if (selectedIds.size === 0) {
+            addToast('info', 'Seçilen skin yok');
+            return;
+        }
+        for (const id of selectedIds) {
+            const meta = downloadedMetas.find((m) => m.id === id);
+            if (meta) {
+                const res = await window.electronAPI.removeSkin({ skinId: id });
+                if (!res.success) {
+                    addToast('error', `"${meta.name}" silinemedi: ${res.error || 'Bilinmeyen hata'}`);
+                }
+                else {
+                    maybeBroadcastRemoval(meta);
+                }
+            }
+        }
+        addToast('success', 'Seçilenler silindi');
+        setSelectedIds(new Set());
+        setSelectionMode(false);
+        refreshDownloaded();
+    };
+    // Türetilmiş set'ler
+    const activeSet = (0, react_1.useMemo)(() => new Set(activeSkins), [activeSkins]);
+    const downloadedIds = (0, react_1.useMemo)(() => new Set(downloadedMetas.map((m) => m.id)), [downloadedMetas]);
+    const favoriteIds = (0, react_1.useMemo)(() => new Set(favorites.map((m) => m.id)), [favorites]);
+    const queueIds = (0, react_1.useMemo)(() => new Set(queue.map((m) => m.id)), [queue]);
+    const refreshDownloaded = () => {
+        if (window.electronAPI) {
+            return window.electronAPI.getDownloadedSkins().then(setDownloadedMetas);
+        }
+        return Promise.resolve();
+    };
+    const initialDownloadedLoadedRef = (0, react_1.useRef)(false);
+    (0, react_1.useEffect)(() => {
+        (0, api_1.fetchChampions)()
+            .then(setChampions)
+            .finally(() => setLoadingChampions(false));
+        if (window.electronAPI) {
+            window.electronAPI.getSettings().then(setSettings);
+            window.electronAPI.getAppVersion().then(setAppVersion);
+            refreshDownloaded().finally(() => {
+                initialDownloadedLoadedRef.current = true;
+            });
+            window.electronAPI.getActiveSkins().then((ids) => {
+                setActiveSkins(ids);
+                setPatcherRunning(ids.length > 0);
+            });
+        }
+        else {
+            initialDownloadedLoadedRef.current = true;
+        }
+    }, []);
+    // Parti üyelerini dinleme
+    (0, react_1.useEffect)(() => {
+        if (!partyRoomCode) {
+            setPartyMembers([]);
+            return;
+        }
+        const unsubscribe = (0, party_1.listenToMembers)(partyRoomCode, setPartyMembers);
+        return () => unsubscribe();
+    }, [partyRoomCode]);
+    const partyProcessedRef = (0, react_1.useRef)({});
+    const partyProcessingRef = (0, react_1.useRef)(new Set());
+    const partyActiveEntriesRef = (0, react_1.useRef)({});
+    const recentlySelfRemovedRef = (0, react_1.useRef)(new Set());
+    const activeSetRef = (0, react_1.useRef)(activeSet);
+    const downloadedIdsRef = (0, react_1.useRef)(downloadedIds);
+    const championsRef = (0, react_1.useRef)(champions);
+    const handleApplyRef = (0, react_1.useRef)(null);
+    (0, react_1.useEffect)(() => {
+        activeSetRef.current = activeSet;
+        downloadedIdsRef.current = downloadedIds;
+        championsRef.current = champions;
+    }, [activeSet, downloadedIds, champions]);
+    // Partiden gelen skin aktivasyonlarını dinleyip otomatik uygula
+    (0, react_1.useEffect)(() => {
+        if (!partyRoomCode)
+            return;
+        const myDeviceId = (0, party_1.getDeviceId)();
+        partyProcessedRef.current = (0, party_1.getProcessedMap)(partyRoomCode);
+        let cancelled = false;
+        let pendingSkins = null;
+        const processSkins = (skins) => {
+            Object.values(skins).forEach(async (entry) => {
+                if (cancelled)
+                    return;
+                if (entry.setBy === myDeviceId)
+                    return;
+                if (partyProcessedRef.current[entry.championId] === entry.setAt)
+                    return;
+                const targetId = entry.chromaId || entry.skinId;
+                if (partyProcessingRef.current.has(targetId))
+                    return;
+                if (activeSetRef.current.has(targetId)) {
+                    partyProcessedRef.current[entry.championId] = entry.setAt;
+                    (0, party_1.setProcessedEntry)(partyRoomCode, entry.championId, entry.setAt);
+                    return;
+                }
+                partyProcessedRef.current[entry.championId] = entry.setAt;
+                (0, party_1.setProcessedEntry)(partyRoomCode, entry.championId, entry.setAt);
+                if (entry.isCustom) {
+                    addToast('info', `Parti: "${entry.name}" özel bir skin — sadece gönderenin bilgisayarında olduğu için senin tarafında uygulanamaz`);
+                    return;
+                }
+                partyProcessingRef.current.add(targetId);
+                try {
+                    addToast('info', `Parti: "${entry.name}" arkadaşın tarafından aktive edildi, indiriliyor...`);
+                    const championKey = championsRef.current.find((c) => c.id === entry.championId)?.key || '';
+                    const partyMeta = {
+                        id: targetId,
+                        name: entry.name,
+                        num: entry.num,
+                        championId: entry.championId,
+                        championKey,
+                        championName: entry.championName
+                    };
+                    if (!downloadedIdsRef.current.has(targetId)) {
+                        let dl;
+                        if (entry.chromaId) {
+                            dl = await window.electronAPI?.downloadChroma({
+                                championKey,
+                                skinId: entry.skinId,
+                                chromaId: entry.chromaId,
+                                meta: partyMeta
+                            });
+                        }
+                        else {
+                            dl = await window.electronAPI?.downloadSkin({ championKey, skinId: entry.skinId, meta: partyMeta });
+                        }
+                        if (!dl || !dl.success) {
+                            addToast('warning', `Parti: "${entry.name}" indirilemedi${dl?.error ? ` (${dl.error})` : ''}, uygulanmadı`);
+                            return;
+                        }
+                        downloadedIdsRef.current = new Set(downloadedIdsRef.current).add(targetId);
+                        refreshDownloaded();
+                    }
+                    await handleApplyRef.current?.(partyMeta);
+                }
+                finally {
+                    partyProcessingRef.current.delete(targetId);
+                }
+            });
+        };
+        const unsubscribe = (0, party_1.listenToRoomSkins)(partyRoomCode, (skins) => {
+            partyActiveEntriesRef.current = skins;
+            if (!initialDownloadedLoadedRef.current) {
+                pendingSkins = skins;
+                return;
+            }
+            processSkins(skins);
+        });
+        const waitId = window.setInterval(() => {
+            if (initialDownloadedLoadedRef.current) {
+                window.clearInterval(waitId);
+                if (pendingSkins)
+                    processSkins(pendingSkins);
+            }
+        }, 150);
+        return () => {
+            cancelled = true;
+            window.clearInterval(waitId);
+            unsubscribe();
+        };
+    }, [partyRoomCode]);
+    (0, react_1.useEffect)(() => {
+        if (!partyRoomCode)
+            return;
+        const unsubscribe = (0, party_1.listenToRemovedSkins)(partyRoomCode, async (championId, entry) => {
+            if (recentlySelfRemovedRef.current.has(championId)) {
+                recentlySelfRemovedRef.current.delete(championId);
+                return;
+            }
+            const targetId = entry.chromaId || entry.skinId;
+            if (!downloadedIdsRef.current.has(targetId))
+                return;
+            try {
+                addToast('info', `Parti: "${entry.name}" bir üye tarafından kaldırıldı, senden de kaldırılıyor...`);
+                await window.electronAPI?.removeSkin({ skinId: targetId });
+                downloadedIdsRef.current = new Set([...downloadedIdsRef.current].filter((id) => id !== targetId));
+                refreshDownloaded();
+            }
+            catch (err) {
+                console.error('Parti silme senkronizasyonu başarısız:', err);
+            }
+        });
+        return () => unsubscribe();
+    }, [partyRoomCode]);
+    (0, react_1.useEffect)(() => {
+        setSelectedChromaId(null);
+        // Custom skinler için LoL API'sinden chroma aramıyoruz
+        if (!modalMeta || modalMeta.isCustom) {
+            setModalChromas([]);
+            return;
+        }
+        let cancelled = false;
+        setLoadingChromas(true);
+        (0, api_1.fetchSkinChromas)(modalMeta.id)
+            .then((chromas) => {
+            if (!cancelled)
+                setModalChromas(chromas);
+        })
+            .catch(() => {
+            if (!cancelled)
+                setModalChromas([]);
+        })
+            .finally(() => {
+            if (!cancelled)
+                setLoadingChromas(false);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [modalMeta]);
+    // Favoriler ve sıra kalıcılığı
+    (0, react_1.useEffect)(() => {
+        localStorage.setItem(FAVORITES_KEY, JSON.stringify(favorites));
+    }, [favorites]);
+    (0, react_1.useEffect)(() => {
+        localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
+    }, [queue]);
+    // IPC dinleyicileri
+    (0, react_1.useEffect)(() => {
+        if (!window.electronAPI)
+            return;
+        window.electronAPI.onSkinDownloadProgress((_, data) => {
+            setDownloadProgress((prev) => ({ ...prev, [data.skinId]: data.percent }));
+        });
+        window.electronAPI.onActiveSkinsChanged((_, ids) => {
+            setActiveSkins(ids);
+            setPatcherRunning(ids.length > 0);
+        });
+        window.electronAPI.onPatchStatus((_, data) => {
+            if (data.state === 'error') {
+                addToast('error', data.message || 'Patch hatası');
+                setPatcherRunning(activeSet.size > 0);
+            }
+            else if (data.state === 'finished' && data.message) {
+                addToast('info', data.message);
+                if (/pasifleştirildi|durdu/i.test(data.message))
+                    setPatcherRunning(false);
+            }
+            else if (data.state === 'started' && data.message) {
+                addToast('success', data.message);
+                setPatcherRunning(true);
+            }
+        });
+        window.electronAPI.onUpdateAvailable(() => {
+            setUpdateAvailable(true);
+            addToast('info', 'Yeni güncelleme bulundu, indiriliyor...');
+        });
+        window.electronAPI.onUpdateDownloaded(() => {
+            setUpdateDownloaded(true);
+            setUpdateAvailable(false);
+            addToast('success', 'Güncelleme indirildi! Yeniden başlatmaya hazır.');
+        });
+        window.electronAPI.onUpdateError((_, err) => {
+            setCheckingUpdate(false);
+            console.error('Güncelleme hatası:', err);
+            addToast('error', `Güncelleme başarısız: ${err?.message || err || 'bilinmeyen hata'}`);
+        });
+    }, []);
+    // --- Yardımcılar ---
+    const metaForSkin = (skin, champion) => ({
+        id: skin.id,
+        name: skin.name,
+        num: skin.num,
+        championId: champion.id,
+        championKey: champion.key || '',
+        championName: champion.name
+    });
+    const selectChampion = (c) => {
+        setSelectedChampion(c);
+        setLoadingSkins(true);
+        (0, api_1.fetchChampionSkins)(c.id)
+            .then(setChampionSkins)
+            .finally(() => setLoadingSkins(false));
+    };
+    const [showRandomMenu, setShowRandomMenu] = (0, react_1.useState)(false);
+    const handleRandomChampion = () => {
+        if (champions.length === 0)
+            return;
+        const randomChamp = champions[Math.floor(Math.random() * champions.length)];
+        selectChampion(randomChamp);
+        setTab('champions');
+        setShowRandomMenu(false);
+    };
+    const handleCreateParty = async () => {
+        const code = await (0, party_1.createRoom)();
+        setPartyRoomCode(code);
+    };
+    const handleJoinParty = async (code) => {
+        const ok = await (0, party_1.joinRoom)(code);
+        if (ok)
+            setPartyRoomCode(code);
+        return ok;
+    };
+    const handleLeaveParty = async () => {
+        if (!partyRoomCode)
+            return;
+        await (0, party_1.leaveRoom)(partyRoomCode);
+        setPartyRoomCode(null);
+    };
+    const handleRandomSkin = async () => {
+        if (champions.length === 0)
+            return;
+        const randomChamp = champions[Math.floor(Math.random() * champions.length)];
+        setShowRandomMenu(false);
+        setLoadingSkins(true);
+        try {
+            const skins = await (0, api_1.fetchChampionSkins)(randomChamp.id);
+            setSelectedChampion(randomChamp);
+            setChampionSkins(skins);
+            setTab('champions');
+            if (skins.length > 0) {
+                const randomSkin = skins[Math.floor(Math.random() * skins.length)];
+                setModalMeta(metaForSkin(randomSkin, randomChamp));
+            }
+        }
+        finally {
+            setLoadingSkins(false);
+        }
+    };
+    const setAdd = (set, id) => new Set(set).add(id);
+    const setRemove = (set, id) => {
+        const next = new Set(set);
+        next.delete(id);
+        return next;
+    };
+    // --- Favoriler ---
+    const toggleFavorite = (meta) => {
+        if (favoriteIds.has(meta.id)) {
+            setFavorites((prev) => prev.filter((f) => f.id !== meta.id));
+        }
+        else {
+            setFavorites((prev) => [meta, ...prev]);
+            addToast('success', `"${meta.name}" favorilere eklendi`);
+        }
+    };
+    // --- Sıra ---
+    const toggleQueue = (meta) => {
+        if (queueIds.has(meta.id)) {
+            setQueue((prev) => prev.filter((q) => q.id !== meta.id));
+            return;
+        }
+        if (activeSet.has(meta.id)) {
+            addToast('warning', `"${meta.name}" zaten aktif — sıraya gerek yok`);
+            return;
+        }
+        setQueue((prev) => [...prev, meta]);
+        addToast('info', `"${meta.name}" sıraya eklendi`);
+    };
+    const removeFromQueue = (id) => setQueue((prev) => prev.filter((q) => q.id !== id));
+    const clearQueue = () => setQueue([]);
+    // --- İndirme ---
+    const handleDownload = async (meta) => {
+        if (!window.electronAPI)
+            return;
+        if (downloading.has(meta.id) || downloadedIds.has(meta.id))
+            return;
+        if (meta.isCustom) {
+            addToast('error', 'Özel skinler dışarıdan indirilemez, bilgisayarınızdan yüklenmelidir');
+            return;
+        }
+        if (!meta.championKey) {
+            addToast('error', 'Bu skin için indirme bilgisi eksik (şampiyon anahtarı yok)');
+            return;
+        }
+        setDownloading((prev) => setAdd(prev, meta.id));
+        setDownloadProgress((prev) => ({ ...prev, [meta.id]: 0 }));
+        const res = await window.electronAPI.downloadSkin({
+            championKey: meta.championKey,
+            skinId: meta.id,
+            meta
+        });
+        setDownloading((prev) => setRemove(prev, meta.id));
+        setDownloadProgress((prev) => {
+            const next = { ...prev };
+            delete next[meta.id];
+            return next;
+        });
+        if (res.success) {
+            addToast('success', `"${meta.name}" indirildi`);
+            refreshDownloaded();
+        }
+        else {
+            addToast('error', res.error || 'İndirme başarısız');
+        }
+    };
+    // --- Özel (custom) skin içe aktarma ---
+    const handleImportCustomSkin = async () => {
+        if (!window.electronAPI)
+            return;
+        const res = await window.electronAPI.importCustomSkin();
+        if (res.canceled)
+            return;
+        if (!res.success) {
+            addToast('error', res.error || 'Skin dosyası içe aktarılamadı');
+            return;
+        }
+        // Şampiyon tespit güvencesi
+        if (!res.detectedChampions || res.detectedChampions.length === 0) {
+            addToast('error', 'Dosyadan herhangi bir şampiyon tespit edilemedi');
+            await window.electronAPI.removeSkin({ skinId: res.customId });
+            return;
+        }
+        const detected = res.detectedChampions[0];
+        const champion = champions.find((c) => c.id.toLowerCase() === detected.toLowerCase());
+        if (!champion) {
+            addToast('error', `"${detected}" isimli bir şampiyon bulunamadı, dosya iptal ediliyor`);
+            await window.electronAPI.removeSkin({ skinId: res.customId });
+            return;
+        }
+        if (res.detectedChampions.length > 1) {
+            addToast('warning', `Dosyada birden fazla şampiyon tespit edildi (${res.detectedChampions.join(', ')}) — ${champion.name} kullanılacak`);
+        }
+        const saveRes = await window.electronAPI.saveCustomSkinMeta({
+            customId: res.customId,
+            meta: {
+                id: res.customId,
+                name: res.fileName || `${champion.name} (Özel)`,
+                championId: champion.id,
+                championKey: champion.key || '',
+                championName: champion.name,
+                isCustom: true
+            }
+        });
+        if (!saveRes.success) {
+            addToast('error', saveRes.error || 'Skin kaydedilemedi');
+            await window.electronAPI.removeSkin({ skinId: res.customId });
+            return;
+        }
+        addToast('success', `"${champion.name}" için özel skin eklendi`);
+        await refreshDownloaded();
+    };
+    const handleDownloadChroma = async (baseMeta, chroma) => {
+        if (!window.electronAPI)
+            return;
+        if (downloading.has(chroma.id) || downloadedIds.has(chroma.id))
+            return;
+        if (!baseMeta.championKey) {
+            addToast('error', 'Bu skin için indirme bilgisi eksik (şampiyon anahtarı yok)');
+            return;
+        }
+        setDownloading((prev) => setAdd(prev, chroma.id));
+        setDownloadProgress((prev) => ({ ...prev, [chroma.id]: 0 }));
+        const res = await window.electronAPI.downloadChroma({
+            championKey: baseMeta.championKey,
+            skinId: baseMeta.id,
+            chromaId: chroma.id,
+            meta: { ...baseMeta, id: chroma.id, name: `${baseMeta.name} — ${chroma.name}` }
+        });
+        setDownloading((prev) => setRemove(prev, chroma.id));
+        setDownloadProgress((prev) => {
+            const next = { ...prev };
+            delete next[chroma.id];
+            return next;
+        });
+        if (res.success) {
+            addToast('success', `"${chroma.name}" indirildi`);
+            refreshDownloaded();
+        }
+        else {
+            addToast('error', res.error || 'İndirme başarısız');
+        }
+    };
+    // --- Aktivasyon ---
+    const handleApply = async (meta, chromaOf) => {
+        if (!window.electronAPI)
+            return;
+        if (applyingIds.has(meta.id))
+            return;
+        if (activeSet.has(meta.id)) {
+            addToast('warning', `"${meta.name}" zaten aktif`);
+            return;
+        }
+        if (!downloadedIdsRef.current.has(meta.id)) {
+            addToast('error', 'Önce skini indirmeniz veya yüklemeniz gerekiyor');
+            return;
+        }
+        setApplyingIds((prev) => setAdd(prev, meta.id));
+        const res = await window.electronAPI.applySkins({ skinIds: [meta.id] });
+        setApplyingIds((prev) => setRemove(prev, meta.id));
+        if (!res.success) {
+            addToast('error', res.error || 'Skin aktif edilemedi');
+            return;
+        }
+        if (res.alreadyActive?.includes(meta.id) && !(activeSet.has(meta.id))) {
+            addToast('warning', `"${meta.name}" zaten aktifti`);
+        }
+        res.warnings?.forEach((w) => addToast('warning', w));
+        if (partyRoomCode) {
+            (0, party_1.broadcastActiveSkin)(partyRoomCode, {
+                skinId: chromaOf || meta.id,
+                ...(chromaOf ? { chromaId: meta.id } : {}),
+                ...(meta.isCustom ? { isCustom: true } : {}),
+                name: meta.name,
+                championId: meta.championId,
+                championName: meta.championName,
+                num: meta.num
+            });
+        }
+    };
+    (0, react_1.useEffect)(() => {
+        handleApplyRef.current = handleApply;
+    });
+    const handleDeactivate = async (meta) => {
+        if (!window.electronAPI)
+            return;
+        const res = await window.electronAPI.deactivateSkin({ skinId: meta.id });
+        if (!res.success) {
+            addToast('error', res.error || 'Skin pasifleştirilemedi');
+            return;
+        }
+        addToast('success', `"${meta.name}" pasifleştirildi`);
+        res.warnings?.forEach((w) => addToast('warning', w));
+    };
+    // --- Kaldırma ---
+    const maybeBroadcastRemoval = (meta) => {
+        if (!partyRoomCode || !meta.championId)
+            return;
+        const entry = partyActiveEntriesRef.current[meta.championId];
+        if (!entry)
+            return;
+        const entryTargetId = entry.chromaId || entry.skinId;
+        if (entryTargetId !== meta.id)
+            return;
+        recentlySelfRemovedRef.current.add(meta.championId);
+        (0, party_1.removeActiveSkin)(partyRoomCode, meta.championId);
+    };
+    const handleRemove = async (meta) => {
+        if (!window.electronAPI)
+            return;
+        setRemovingIds((prev) => setAdd(prev, meta.id));
+        const res = await window.electronAPI.removeSkin({ skinId: meta.id });
+        setRemovingIds((prev) => setRemove(prev, meta.id));
+        if (res.success) {
+            addToast('success', `"${meta.name}" kaldırıldı`);
+            setQueue((prev) => prev.filter((q) => q.id !== meta.id));
+            refreshDownloaded();
+            if (modalMeta?.id === meta.id)
+                setModalMeta(null);
+            maybeBroadcastRemoval(meta);
+        }
+        else {
+            addToast('error', res.error || 'Skin kaldırılamadı');
+        }
+    };
+    // --- Patchle ---
+    const handlePatch = async () => {
+        if (!window.electronAPI)
+            return;
+        if (queue.length === 0 || isPatching)
+            return;
+        setIsPatching(true);
+        const failedIds = new Set();
+        try {
+            // 1) İndirilmemiş olanları sırayla indir
+            const missing = queue.filter((q) => !downloadedIds.has(q.id));
+            for (let i = 0; i < missing.length; i++) {
+                const meta = missing[i];
+                if (meta.isCustom) {
+                    failedIds.add(meta.id);
+                    addToast('error', `"${meta.name}" özel bir skin ve dosyası eksik olduğu için atlanıyor`);
+                    continue;
+                }
+                setPatchProgress(`İndiriliyor (${i + 1}/${missing.length}): ${meta.name}`);
+                setDownloading((prev) => setAdd(prev, meta.id));
+                setDownloadProgress((prev) => ({ ...prev, [meta.id]: 0 }));
+                const res = await window.electronAPI.downloadSkin({
+                    championKey: meta.championKey,
+                    skinId: meta.id,
+                    meta
+                });
+                setDownloading((prev) => setRemove(prev, meta.id));
+                setDownloadProgress((prev) => {
+                    const next = { ...prev };
+                    delete next[meta.id];
+                    return next;
+                });
+                if (!res.success) {
+                    failedIds.add(meta.id);
+                    addToast('error', `"${meta.name}" indirilemedi: ${res.error || 'Bilinmeyen hata'}`);
+                }
+            }
+            refreshDownloaded();
+            // 2) İndirilenleri topluca aktif et
+            const applyIds = queue.filter((q) => !failedIds.has(q.id)).map((q) => q.id);
+            if (applyIds.length > 0) {
+                setPatchProgress('Skinler uygulanıyor...');
+                const res = await window.electronAPI.applySkins({ skinIds: applyIds });
+                if (!res.success) {
+                    addToast('error', res.error || 'Skinler uygulanamadı');
+                }
+                else {
+                    res.warnings?.forEach((w) => addToast('warning', w));
+                    if (res.missing?.length) {
+                        addToast('warning', `${res.missing.length} skin dosyası bulunamadı, atlandı`);
+                    }
+                    const applied = new Set(applyIds.filter((id) => !(res.missing || []).includes(id)));
+                    setQueue((prev) => prev.filter((q) => !applied.has(q.id)));
+                }
+            }
+            if (failedIds.size > 0) {
+                const failedNames = queue
+                    .filter((q) => failedIds.has(q.id))
+                    .map((q) => q.name)
+                    .join(', ');
+                addToast('warning', `Atlanan skinler: ${failedNames}`);
+            }
+        }
+        finally {
+            setPatchProgress('');
+            setIsPatching(false);
+        }
+    };
+    // --- Patchleri Durdur ---
+    const handleStopPatches = async () => {
+        if (!window.electronAPI)
+            return;
+        const activeIds = Array.from(activeSet);
+        if (activeIds.length === 0) {
+            addToast('info', 'Aktif skin yok');
+            return;
+        }
+        for (const id of activeIds) {
+            const res = await window.electronAPI.deactivateSkin({ skinId: id });
+            if (!res.success) {
+                addToast('error', res.error || 'Skin pasif edilemedi');
+            }
+        }
+        addToast('success', 'Tüm patchler durduruldu');
+    };
+    // --- Ayarlar ---
+    const handleBrowse = async (field) => {
+        if (!window.electronAPI)
+            return;
+        let result = null;
+        if (field === 'patcherPath')
+            result = await window.electronAPI.selectPatcherPath();
+        else if (field === 'dllPath')
+            result = await window.electronAPI.selectDllPath();
+        else
+            result = await window.electronAPI.selectGamePath();
+        if (result) {
+            setSettings((prev) => ({ ...prev, [field]: result }));
+        }
+    };
+    const handleSaveSettings = async (next) => {
+        if (!window.electronAPI)
+            return;
+        const res = await window.electronAPI.saveSettings(next);
+        if (res.success)
+            addToast('success', 'Ayarlar kaydedildi');
+        else
+            addToast('error', res.error || 'Ayarlar kaydedilemedi');
+    };
+    const handleCheckUpdate = async () => {
+        if (!window.electronAPI)
+            return;
+        setCheckingUpdate(true);
+        try {
+            const res = await window.electronAPI.checkForUpdates();
+            setCheckingUpdate(false);
+            if (res?.success) {
+                addToast('success', 'Güncelleme kontrolü tamamlandı');
+            }
+            else {
+                addToast('error', res?.error || 'Güncelleme kontrolü başarısız');
+            }
+        }
+        catch {
+            setCheckingUpdate(false);
+            addToast('error', 'Güncelleme kontrolü sırasında hata oluştu');
+        }
+    };
+    // --- Görünüme hazırlık ---
+    const searchLower = search.trim().toLowerCase();
+    const metaMatches = (m) => !searchLower ||
+        m.name.toLowerCase().includes(searchLower) ||
+        m.championName.toLowerCase().includes(searchLower);
+    const skinGrid = (metas, EmptyIcon, emptyTitle, emptyHint, showManagement = false) => metas.length === 0 ? ((0, jsx_runtime_1.jsxs)("div", { className: "h-full flex flex-col items-center justify-center text-center py-20", children: [(0, jsx_runtime_1.jsx)(EmptyIcon, { className: "w-10 h-10 mb-4 text-gray-500", strokeWidth: 1.5 }), (0, jsx_runtime_1.jsx)("p", { className: "text-gray-300 font-semibold", children: emptyTitle }), (0, jsx_runtime_1.jsx)("p", { className: "text-gray-600 text-sm mt-1 max-w-xs", children: emptyHint })] })) : ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [showManagement && ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center gap-2 mb-4", children: [(0, jsx_runtime_1.jsx)("button", { onClick: () => setSelectionMode(!selectionMode), className: `inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition ${selectionMode
+                            ? 'bg-sky-500/20 border border-sky-500/40 text-sky-300'
+                            : 'bg-white/[0.04] text-gray-400 hover:bg-white/[0.08]'}`, children: selectionMode ? ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsx)(lucide_react_1.Check, { className: "w-4 h-4", strokeWidth: 2.5 }), " Se\u00E7im Kapat"] })) : ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsx)(lucide_react_1.Square, { className: "w-4 h-4", strokeWidth: 2 }), " Se\u00E7"] })) }), selectionMode && selectedIds.size > 0 && ((0, jsx_runtime_1.jsxs)("button", { onClick: handleDeleteSelected, className: "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition", children: [(0, jsx_runtime_1.jsx)(lucide_react_1.Trash2, { className: "w-4 h-4", strokeWidth: 2 }), " Se\u00E7ilenleri Sil (", selectedIds.size, ")"] })), (0, jsx_runtime_1.jsxs)("button", { onClick: handleDeleteAllDownloaded, className: "ml-auto inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition", children: [(0, jsx_runtime_1.jsx)(lucide_react_1.Trash2, { className: "w-4 h-4", strokeWidth: 2 }), " Hepsini Sil"] })] })), (0, jsx_runtime_1.jsx)("div", { className: "grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4", children: metas.map((meta) => ((0, jsx_runtime_1.jsx)(SkinCard_1.default, { meta: meta, isDownloaded: downloadedIds.has(meta.id), isActive: activeSet.has(meta.id), isFavorite: favoriteIds.has(meta.id), inQueue: queueIds.has(meta.id), isDownloading: downloading.has(meta.id), isSelectable: selectionMode, isSelected: selectedIds.has(meta.id), onSelect: () => toggleSelection(meta.id), onOpen: () => setModalMeta(meta), onToggleFavorite: () => toggleFavorite(meta), onToggleQueue: () => toggleQueue(meta), onDownload: () => handleDownload(meta) }, meta.id))) })] }));
+    const headerTitle = tab === 'champions'
+        ? selectedChampion
+            ? selectedChampion.name
+            : 'Şampiyonlar'
+        : tab === 'favorites'
+            ? 'Favoriler'
+            : 'İndirilenler';
+    let content;
+    if (tab === 'champions') {
+        if (selectedChampion) {
+            const metas = championSkins.map((s) => metaForSkin(s, selectedChampion)).filter(metaMatches);
+            content = ((0, jsx_runtime_1.jsxs)("div", { children: [(0, jsx_runtime_1.jsxs)("button", { onClick: () => setSelectedChampion(null), className: "mb-4 text-sm text-sky-400 hover:text-sky-300 flex items-center gap-1 transition", children: [(0, jsx_runtime_1.jsx)(lucide_react_1.ArrowLeft, { className: "w-4 h-4", strokeWidth: 2 }), " T\u00FCm \u015Fampiyonlar"] }), loadingSkins ? ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-center py-20 text-gray-500 gap-3", children: [(0, jsx_runtime_1.jsx)("span", { className: "animate-spin inline-block w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full" }), "Skinler y\u00FCkleniyor..."] })) : (skinGrid(metas, lucide_react_1.Palette, 'Skin bulunamadı', 'Aramanızla eşleşen skin yok.'))] }));
+        }
+        else {
+            const filtered = searchLower
+                ? champions.filter((c) => c.name.toLowerCase().includes(searchLower) || c.id.toLowerCase().includes(searchLower))
+                : champions;
+            content = loadingChampions ? ((0, jsx_runtime_1.jsxs)("div", { className: "flex items-center justify-center py-20 text-gray-500 gap-3", children: [(0, jsx_runtime_1.jsx)("span", { className: "animate-spin inline-block w-5 h-5 border-2 border-sky-500 border-t-transparent rounded-full" }), "\u015Eampiyonlar y\u00FCkleniyor..."] })) : ((0, jsx_runtime_1.jsx)("div", { className: "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-8 gap-4", children: filtered.map((c) => {
+                    const pos = c.id === 'KhaZix' ? '95% center' : c.id === 'MonkeyKing' ? '80% center' : CHAMPION_POSITIONS[c.id] || 'center';
+                    return ((0, jsx_runtime_1.jsxs)("button", { onClick: () => selectChampion(c), className: "group relative bg-white/[0.03] border border-white/[0.07] rounded-xl overflow-hidden transition-all duration-300 ease-out hover:-translate-y-1 hover:border-sky-400/70 hover:shadow-[0_8px_24px_-4px_rgba(56,189,248,0.35)] focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-400/70", children: [(0, jsx_runtime_1.jsx)("div", { className: "pointer-events-none absolute inset-0 z-10 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300 ring-1 ring-inset ring-sky-300/40" }), (0, jsx_runtime_1.jsxs)("div", { className: "aspect-[3/4] relative overflow-hidden", children: [(0, jsx_runtime_1.jsx)("img", { src: `./champions/${c.id === 'KhaZix' ? 'khazix' : c.id === 'MonkeyKing' ? 'wukong' : getChampionImageFilename(c.id)}.jpg`, alt: c.name, className: "w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-[1.12]", style: { objectPosition: pos, transformOrigin: pos }, loading: "lazy", onError: (e) => {
+                                            e.target.style.display = 'none';
+                                        } }), (0, jsx_runtime_1.jsx)("div", { className: "absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent pt-16 pb-2 px-2", children: (0, jsx_runtime_1.jsx)("p", { className: "text-xs font-medium text-white truncate", children: c.name }) })] })] }, c.id));
+                }) }));
+        }
+    }
+    else if (tab === 'favorites') {
+        content = skinGrid(favorites.filter(metaMatches), lucide_react_1.Heart, 'Henüz favori yok', 'Skin kartlarındaki kalp butonu ile favorilerinize ekleyin.');
+    }
+    else {
+        content = skinGrid(downloadedMetas.filter(metaMatches), lucide_react_1.Package, 'İndirilmiş skin yok', 'İndirdiğiniz veya eklediğiniz özel skinler burada görünecek. İndirme, skini otomatik aktif ETMEZ.', true);
+    }
+    return ((0, jsx_runtime_1.jsxs)("div", { className: "h-screen w-screen flex flex-col bg-[#0f0f11] text-gray-100 overflow-hidden select-none", children: [(0, jsx_runtime_1.jsxs)("div", { className: "flex flex-1 min-h-0", children: [(0, jsx_runtime_1.jsx)(Sidebar_1.default, { tab: tab, onTabChange: (t) => {
+                            setTab(t);
+                            setSearch('');
+                        }, patcherRunning: patcherRunning, activeCount: activeSkins.length, favoritesCount: favorites.length, downloadedCount: downloadedMetas.length, champions: champions, selectedChampionId: selectedChampion?.id || null, onSelectChampion: selectChampion, settings: settings, appVersion: appVersion, updateAvailable: updateAvailable, downloaded: updateDownloaded, checkingUpdate: checkingUpdate, onBrowse: handleBrowse, onSaveSettings: handleSaveSettings, onCheckUpdate: handleCheckUpdate, onInstallUpdate: () => window.electronAPI?.installUpdate(), onOpenParty: () => setShowPartyModal(true) }), (0, jsx_runtime_1.jsxs)("main", { className: "flex-1 min-w-0 flex flex-col", children: [(0, jsx_runtime_1.jsxs)("header", { className: "shrink-0 flex items-center gap-4 px-5 py-3 border-b border-white/[0.06] bg-white/[0.02]", children: [(0, jsx_runtime_1.jsxs)("div", { className: "relative", children: [(0, jsx_runtime_1.jsxs)("button", { onClick: () => setShowRandomMenu((v) => !v), className: "flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-gray-300 hover:bg-sky-500/15 hover:border-sky-500/30 hover:text-sky-300 transition", children: [(0, jsx_runtime_1.jsx)(lucide_react_1.Dices, { className: "w-3.5 h-3.5", strokeWidth: 2 }), " Rastgele"] }), showRandomMenu && ((0, jsx_runtime_1.jsxs)(jsx_runtime_1.Fragment, { children: [(0, jsx_runtime_1.jsx)("div", { className: "fixed inset-0 z-40", onClick: () => setShowRandomMenu(false) }), (0, jsx_runtime_1.jsxs)("div", { className: "absolute top-full left-0 mt-2 z-50 w-44 bg-[#1c1c1f] border border-white/[0.08] rounded-xl shadow-2xl shadow-black/50 overflow-hidden", children: [(0, jsx_runtime_1.jsxs)("button", { onClick: handleRandomChampion, className: "w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition flex items-center gap-2", children: [(0, jsx_runtime_1.jsx)(lucide_react_1.Wand2, { className: "w-4 h-4", strokeWidth: 2 }), " Rastgele Karakter"] }), (0, jsx_runtime_1.jsxs)("button", { onClick: handleRandomSkin, className: "w-full text-left px-4 py-2.5 text-sm text-gray-300 hover:bg-white/[0.06] hover:text-white transition border-t border-white/[0.06] flex items-center gap-2", children: [(0, jsx_runtime_1.jsx)(lucide_react_1.Palette, { className: "w-4 h-4", strokeWidth: 2 }), " Rastgele Skin"] })] })] }))] }), (0, jsx_runtime_1.jsx)("h1", { className: "text-lg font-bold tracking-tight truncate", children: headerTitle }), tab === 'champions' && !selectedChampion && ((0, jsx_runtime_1.jsxs)("span", { className: "text-sm text-gray-500", children: ["(", champions.length, ")"] })), tab === 'champions' && selectedChampion && ((0, jsx_runtime_1.jsxs)("span", { className: "text-xs text-gray-500 bg-white/[0.05] border border-white/[0.08] rounded-full px-2 py-0.5", children: [championSkins.length, " skin"] })), tab === 'downloaded' && ((0, jsx_runtime_1.jsxs)("button", { onClick: handleImportCustomSkin, className: "inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-white/[0.05] border border-white/[0.08] text-gray-300 hover:bg-sky-500/15 hover:border-sky-500/30 hover:text-sky-300 transition", children: [(0, jsx_runtime_1.jsx)(lucide_react_1.FolderPlus, { className: "w-3.5 h-3.5", strokeWidth: 2 }), " \u00D6zel Skin Ekle"] })), (0, jsx_runtime_1.jsxs)("div", { className: "ml-auto w-64 relative", children: [(0, jsx_runtime_1.jsx)(lucide_react_1.Search, { className: "w-4 h-4 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none", strokeWidth: 2 }), (0, jsx_runtime_1.jsx)("input", { type: "text", placeholder: tab === 'champions' && !selectedChampion ? 'Şampiyon ara...' : 'Skin ara...', value: search, onChange: (e) => setSearch(e.target.value), className: "w-full bg-black/30 border border-white/[0.08] rounded-lg pl-9 pr-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/25 transition" })] })] }), (0, jsx_runtime_1.jsx)("div", { className: "flex-1 min-h-0 overflow-y-auto p-5", children: content })] })] }), (0, jsx_runtime_1.jsx)(QueueBar_1.default, { queue: queue, activeIds: activeSet, isPatching: isPatching, patchProgress: patchProgress, onRemoveItem: removeFromQueue, onClear: clearQueue, onPatch: handlePatch, onStopPatches: handleStopPatches }), modalMeta && (() => {
+                const selectedChroma = modalChromas.find((c) => c.id === selectedChromaId) ?? null;
+                const activeModalMeta = selectedChroma
+                    ? { ...modalMeta, id: selectedChroma.id }
+                    : modalMeta;
+                return ((0, jsx_runtime_1.jsx)(SkinModal_1.default, { meta: activeModalMeta, isDownloaded: downloadedIds.has(activeModalMeta.id), downloadProgress: downloading.has(activeModalMeta.id) ? downloadProgress[activeModalMeta.id] ?? 0 : undefined, isActive: activeSet.has(activeModalMeta.id), isFavorite: favoriteIds.has(activeModalMeta.id), inQueue: queueIds.has(activeModalMeta.id), isApplying: applyingIds.has(activeModalMeta.id), isRemoving: removingIds.has(activeModalMeta.id), onClose: () => setModalMeta(null), onDownload: () => selectedChroma ? handleDownloadChroma(modalMeta, selectedChroma) : handleDownload(modalMeta), onApply: () => handleApply(activeModalMeta, selectedChroma ? modalMeta.id : undefined), onDeactivate: () => handleDeactivate(activeModalMeta), onRemove: () => handleRemove(activeModalMeta), onToggleFavorite: () => toggleFavorite(activeModalMeta), onToggleQueue: () => toggleQueue(activeModalMeta), chromas: modalChromas, loadingChromas: loadingChromas, selectedChromaId: selectedChromaId, onSelectChroma: setSelectedChromaId }));
+            })(), showPartyModal && ((0, jsx_runtime_1.jsx)(PartyModal_1.default, { roomCode: partyRoomCode, members: partyMembers, onClose: () => setShowPartyModal(false), onCreate: handleCreateParty, onJoin: handleJoinParty, onLeave: handleLeaveParty })), (0, jsx_runtime_1.jsx)(Toasts_1.default, { toasts: toasts })] }));
+}

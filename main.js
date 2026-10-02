@@ -5,6 +5,8 @@ const https = require('https')
 const fs = require('fs')
 const path = require('path')
 const { mergeWads, verifyWadFile, parseSkinArchive } = require('./wad.js')
+const { runSkinRemapPipeline } = require('./src/ltk/skinSlotRemapper');
+const { rebaseWadFile } = require('./src/rebaser')
 
 let mainWindow = null
 
@@ -399,7 +401,7 @@ function findGameWad(gameDir, wadName) {
   return findInGame(gameDir, 0)
 }
 
-function rebuildOverlay(skinIds, gameDir) {
+async function rebuildOverlay(skinIds, gameDir) {
   const overlayDir = path.join(app.getPath('userData'), 'overlay')
   const extractDir = path.join(app.getPath('userData'), 'overlay_extract')
   fs.rmSync(overlayDir, { recursive: true, force: true })
@@ -475,12 +477,29 @@ function rebuildOverlay(skinIds, gameDir) {
     const outPath = path.join(overlayDir, dest)
     fs.mkdirSync(path.dirname(outPath), { recursive: true })
 
-    // Stream tabanlı Zincirleme Merge
+
+   // Stream tabanlı Zincirleme Merge
     let currentInputPath = gameWadPath
     for (const modFile of files) {
-      const st = mergeWads(currentInputPath, modFile, outPath)
+      let finalModFile = modFile
+      try {
+        // Champion adını WAD dosya adından çıkar (örn: "lulu.wad.client" -> "lulu")
+        const championName = name.replace(/\.wad\.client$/i, '')
+        // Tools dizini olarak patcher dizinini kullan (ritobin.exe orada olmalı)
+        const toolsDir = path.dirname(check.settings.patcherPath)
+        finalModFile = await rebaseWadFile({
+          wadPath: modFile,
+          championName,
+          outputDir: path.dirname(modFile),
+          toolsDir
+        })
+      } catch (err) {
+        dbgLines.push(`[${name}] Rebase uyarısı/hatası: ${err.message}`)
+      }
+
+      const st = mergeWads(currentInputPath, finalModFile, outPath)
       dbgLines.push(
-        `[${name}] mod=${path.basename(modFile)} modWAD=v${st.modVersion} baseWAD=v${st.baseVersion} ` +
+        `[${name}] mod=${path.basename(finalModFile)} modWAD=v${st.modVersion} baseWAD=v${st.baseVersion} ` +
           `oyunChunk=${st.baseEntries} modChunk=${st.modEntries} override=${st.overriddenChunks} yeni=${st.addedChunks} ` +
           `sıkıştırmaTürleri=${JSON.stringify(st.modTypes)} çıktıBoyut=${st.outSize}`
       )
@@ -590,7 +609,7 @@ async function syncPatcher() {
   const check = validatePatcherSettings()
   if (check.error) throw new Error(check.error)
 
-  const { overlayDir: outDir, mergedCount, warnings } = rebuildOverlay(skinIds, check.gameDir)
+  const { overlayDir: outDir, mergedCount, warnings } = await rebuildOverlay(skinIds, check.gameDir)
 
   await new Promise((resolve) => setTimeout(resolve, 500))
 
