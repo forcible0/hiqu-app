@@ -484,8 +484,10 @@ async function rebuildOverlay(skinIds, gameDir) {
       try {
         // Champion adını WAD dosya adından çıkar (örn: "lulu.wad.client" -> "lulu")
         const championName = name.replace(/\.wad\.client$/i, '')
-        // Tools dizini olarak patcher dizinini kullan (ritobin.exe orada olmalı)
-        const toolsDir = path.dirname(check.settings.patcherPath)
+        // Tools dizini - hem development hem production için doğru path
+        const toolsDir = app.isPackaged
+          ? path.join(process.resourcesPath, 'tools')
+          : path.join(__dirname, 'tools')
         finalModFile = await rebaseWadFile({
           wadPath: modFile,
           championName,
