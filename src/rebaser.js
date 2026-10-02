@@ -1,18 +1,11 @@
-import { execFile } from 'child_process';
-import path from 'path';
-import fs from 'fs-extra';
-import { promisify } from 'util';
+const { execFile } = require('child_process');
+const path = require('path');
+const fs = require('fs-extra');
+const { promisify } = require('util');
 
 const execFileAsync = promisify(execFile);
 
-interface RebaseOptions {
-  wadPath: string;        // İndirilen ham .wad.client dosyasının yolu
-  championName: string;   // Örn: "Lulu" veya "Zed"
-  outputDir: string;      // İşlenmiş dosyaların kaydedileceği yer
-  toolsDir: string;       // ritobin.exe'nin bulunduğu klasör
-}
-
-export async function rebaseWadFile(options: RebaseOptions): Promise<string> {
+async function rebaseWadFile(options) {
   const { wadPath, championName, outputDir, toolsDir } = options;
   const ritobinPath = path.join(toolsDir, 'ritobin.exe');
 
@@ -76,8 +69,8 @@ export async function rebaseWadFile(options: RebaseOptions): Promise<string> {
 }
 
 // Yardımcı Fonksiyon: Dizin içindeki .bin dosyalarını bulur
-async function findBinFiles(dir: string): Promise<string[]> {
-  let results: string[] = [];
+async function findBinFiles(dir) {
+  let results = [];
   const list = await fs.readdir(dir);
 
   for (const file of list) {
@@ -93,3 +86,5 @@ async function findBinFiles(dir: string): Promise<string[]> {
 
   return results;
 }
+
+module.exports = { rebaseWadFile };

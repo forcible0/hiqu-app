@@ -1,6 +1,6 @@
 {
   "name": "hiqu",
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "Electron + React + TypeScript + Tailwind CSS masaüstü uygulaması",
   "main": "main.js",
   "scripts": {
@@ -58,6 +58,7 @@
       "main.js",
       "preload.js",
       "wad.js",
+      "src/rebaser.js",
       "package.json"
     ],
     "win": {
