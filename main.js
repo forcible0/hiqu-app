@@ -5,7 +5,6 @@ const https = require('https')
 const fs = require('fs')
 const path = require('path')
 const { mergeWads, verifyWadFile, parseSkinArchive } = require('./wad.js')
-const { runSkinRemapPipeline } = require('./src/ltk/skinSlotRemapper');
 const { rebaseWadFile } = require('./src/rebaser')
 
 let mainWindow = null
